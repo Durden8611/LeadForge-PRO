@@ -1,60 +1,71 @@
-import { createClient } from '../../lib/supabase'
 import { useEffect } from 'react'
 import { useRouter } from 'next/router'
+import { createClient } from '../../lib/supabase'
+import { ensureProfile } from '../../lib/ensureProfile'
 
-// This page handles the redirect after:
-// - Email magic link clicks
-// - Google OAuth callback
-// - Apple OAuth callback
+function readHashParams() {
+  return new URLSearchParams(window.location.hash.replace(/^#/, ''))
+}
+
 export default function AuthCallback() {
   const router = useRouter()
 
   useEffect(() => {
     const supabase = createClient()
-    // Supabase SSR automatically exchanges the code in the URL for a session
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        // If a pending profile was stored during signup, upsert it now (after session is established)
-        try {
-          const raw = localStorage.getItem('pending_profile')
-          if (raw) {
-            const pending = JSON.parse(raw)
-            if (pending && pending.username) {
-              // Attempt to upsert into profiles table; ignore if table doesn't exist
-              supabase.from('profiles').upsert([{ id: session.user.id, username: pending.username, full_name: pending.username }])
-                .then(() => { try { localStorage.removeItem('pending_profile') } catch (e) {} })
-                .catch(() => {})
-            }
-          }
-        } catch (e) {}
-        router.replace('/app')
-      } else {
-        router.replace('/login?error=auth_failed')
+
+    async function finishAuth() {
+      const url = new URL(window.location.href)
+      const code = url.searchParams.get('code')
+      const errorCode = url.searchParams.get('error_code')
+      const hashParams = readHashParams()
+      const hashError = hashParams.get('error')
+
+      if (errorCode || hashError) {
+        router.replace('/login?error=callback_failed')
+        return
       }
-    })
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) {
+          router.replace('/login?error=callback_failed')
+          return
+        }
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session) {
+        router.replace('/login?error=no_session')
+        return
+      }
+
+      await ensureProfile(supabase, session.user)
+
+      const authType = hashParams.get('type') || url.searchParams.get('type')
+
+      if (authType !== 'recovery' && !session.user?.email_confirmed_at) {
+        await supabase.auth.signOut()
+        router.replace('/login?error=verify_email')
+        return
+      }
+
+      router.replace(authType === 'recovery' ? '/auth/reset-password' : '/app')
+    }
+
+    finishAuth()
   }, [router])
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0d0d0d',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: '1rem',
-      fontFamily: 'sans-serif',
-      color: '#f5f0e8'
+      background: '#111',
+      color: '#f5f0e8',
+      display: 'grid',
+      placeItems: 'center',
+      fontFamily: 'DM Sans, sans-serif',
     }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: '50%',
-        border: '2px solid #2a2a2a', borderTopColor: '#c9a84c',
-        animation: 'spin 0.8s linear infinite'
-      }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      <p style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: '#5a5040', letterSpacing: '0.1em' }}>
-        SIGNING YOU IN…
-      </p>
+      Finishing sign in...
     </div>
   )
 }

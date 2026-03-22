@@ -29,3 +29,5 @@ yarn-error.log*
 
 # Local
 scripts/add-hosts.ps1
+.env*.local
+supabase/.temp/

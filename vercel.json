@@ -1,8 +1,5 @@
 {
-  "name": "leadforge-pro",
   "builds": [
     { "src": "package.json", "use": "@vercel/next" }
-  ],
-  "routes": [],
-  "env": {}
+  ]
 }

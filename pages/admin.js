@@ -16,12 +16,10 @@ export default function AdminPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return router.replace('/login')
       setUser(session.user)
-      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(s=>s.trim()).filter(Boolean)
-      const isEnvAdmin = adminEmails.includes(session.user.email)
-      // Fetch profile to see is_admin flag
+      // Access is controlled by the server-side-backed profile admin flag.
       supabase.from('profiles').select('is_admin').eq('id', session.user.id).single()
         .then(({ data, error }) => {
-          const isAdmin = isEnvAdmin || (data && data.is_admin)
+          const isAdmin = data && data.is_admin
           if (!isAdmin) {
             router.replace('/app')
             return
@@ -29,7 +27,7 @@ export default function AdminPage() {
           // load profiles
           loadProfiles(supabase)
         })
-        .catch(() => { if (isEnvAdmin) loadProfiles(supabase); else router.replace('/app') })
+        .catch(() => { router.replace('/app') })
     })
   }, [])
 
@@ -65,7 +63,7 @@ export default function AdminPage() {
   const rows = profiles.filter(p => {
     if (!query) return true
     const q = query.toLowerCase()
-    return (p.username || '').toLowerCase().includes(q) || (p.full_name || '').toLowerCase().includes(q) || (p.id || '').toLowerCase().includes(q)
+    return JSON.stringify(p).toLowerCase().includes(q)
   })
 
   return (
@@ -76,7 +74,7 @@ export default function AdminPage() {
       <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
         <h2>Admin — Manage Profiles</h2>
         <div style={{ marginBottom: 12 }}>
-          <input placeholder="Search username, id or name" value={query} onChange={e=>setQuery(e.target.value)} style={{ padding:8, width:320 }} />
+          <input placeholder="Search profile row JSON or id" value={query} onChange={e=>setQuery(e.target.value)} style={{ padding:8, width:320 }} />
           <button onClick={() => { setQuery('') }} style={{ marginLeft:8 }}>Clear</button>
         </div>
         {msg && <div style={{ marginBottom: 12, color: msg.type === 'error' ? 'crimson' : 'green' }}>{msg.text}</div>}
@@ -96,20 +94,17 @@ export default function AdminPage() {
 
 function ProfileRow({ profile, onSave, onDelete }) {
   const [edit, setEdit] = useState(false)
-  const [username, setUsername] = useState(profile.username || '')
-  const [fullName, setFullName] = useState(profile.full_name || '')
   const [isAdmin, setIsAdmin] = useState(!!profile.is_admin)
+  const rawProfile = JSON.stringify(profile, null, 2)
 
   return (
     <div style={{ padding:12, border: '1px solid #ddd', borderRadius:6, display:'flex', gap:12, alignItems:'center' }}>
       <div style={{ flex:1 }}>
         <div style={{ fontSize:12, color:'#666' }}>{profile.id}</div>
-        {!edit && <div style={{ fontWeight:600 }}>{username || '(no username)'}</div>}
-        {!edit && <div style={{ fontSize:13, color:'#444' }}>{fullName || ''}</div>}
+        {!edit && <div style={{ fontWeight:600 }}>{profile.is_admin ? 'Admin user' : 'Standard user'}</div>}
+        {!edit && <pre style={{ fontSize:12, color:'#444', margin:'8px 0 0', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{rawProfile}</pre>}
         {edit && (
           <div style={{ display:'flex', gap:8, marginTop:8 }}>
-            <input value={username} onChange={e=>setUsername(e.target.value)} placeholder="username" />
-            <input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Full name" />
             <label style={{ display:'flex', alignItems:'center', gap:6 }}>
               <input type="checkbox" checked={isAdmin} onChange={e=>setIsAdmin(e.target.checked)} /> Admin
             </label>
@@ -118,7 +113,7 @@ function ProfileRow({ profile, onSave, onDelete }) {
       </div>
       <div style={{ display:'flex', gap:8 }}>
         {!edit && <button onClick={()=>setEdit(true)}>Edit</button>}
-        {edit && <button onClick={() => { onSave({ id: profile.id, username: username || null, full_name: fullName || null, is_admin: isAdmin || null }); setEdit(false) }}>Save</button>}
+        {edit && <button onClick={() => { onSave({ id: profile.id, is_admin: isAdmin }); setEdit(false) }}>Save</button>}
         <button onClick={() => onDelete(profile.id)} style={{ color:'crimson' }}>Delete</button>
       </div>
     </div>
