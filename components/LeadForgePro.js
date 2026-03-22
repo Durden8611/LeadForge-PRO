@@ -184,8 +184,8 @@ React.createElement("div",null,React.createElement("span",{style:{color:"var(--m
 // Contact box
 React.createElement("div",{className:"cbox"},
 React.createElement("div",{className:"cbox-t"},"\ud83d\udcde Contact"),
-React.createElement("div",{className:"crow"},React.createElement("span",{className:"crow-i"},"\ud83d\udcf1"),React.createElement("span",{className:"crow-v"},l.phone?React.createElement(React.Fragment,null,React.createElement("a",{href:"tel:"+l.phone,onClick:onCl},l.phone),l.altPhone&&React.createElement("span",{style:{color:"var(--mut)"}}," \u00b7 ",React.createElement("a",{href:"tel:"+l.altPhone},l.altPhone))):React.createElement("span",{style:{color:"var(--mut)"}},"Not publicly listed"))),
-React.createElement("div",{className:"crow"},React.createElement("span",{className:"crow-i"},"\u2709\ufe0f"),React.createElement("span",{className:"crow-v"},l.email?React.createElement("a",{href:"mailto:"+l.email},l.email):React.createElement("span",{style:{color:"var(--mut)"}},"Not publicly listed"))),
+React.createElement("div",{className:"crow"},React.createElement("span",{className:"crow-i"},"\ud83d\udcf1"),React.createElement("span",{className:"crow-v"},l.phone?React.createElement(React.Fragment,null,React.createElement("a",{href:"tel:"+l.phone,onClick:onCl},l.phone),l.altPhone&&React.createElement("span",{style:{color:"var(--mut)"}}," \u00b7 ",React.createElement("a",{href:"tel:"+l.altPhone},l.altPhone))):React.createElement("span",{style:{color:"var(--mut)",fontSize:".78rem"}},"Skip trace needed \u2014 property records don\u2019t include phone"))),
+React.createElement("div",{className:"crow"},React.createElement("span",{className:"crow-i"},"\u2709\ufe0f"),React.createElement("span",{className:"crow-v"},l.email?React.createElement("a",{href:"mailto:"+l.email},l.email):React.createElement("span",{style:{color:"var(--mut)",fontSize:".78rem"}},"Skip trace needed \u2014 property records don\u2019t include phone"))),
 React.createElement("div",{className:"crow"},React.createElement("span",{className:"crow-i"},"\ud83d\udcac"),React.createElement("span",{className:"crow-v",style:{color:"#5a7a50",fontSize:".71rem"}},"Prefers: ",l.contactPref,l.contactCount>0&&" \u00b7 "+l.contactCount+"x"))
 ),
 // Info rows
@@ -208,8 +208,8 @@ React.createElement("div",{style:{marginTop:".5rem"}},React.createElement("span"
 ),
 // Footer buttons
 React.createElement("div",{className:"lc-ft"},
-React.createElement(l.phone?"a":"button",l.phone?{href:"tel:"+l.phone,className:"lcb cl",onClick:function(e){onCl();cpy(l.phone);e.preventDefault();window.open("tel:"+l.phone)}}:{type:"button",className:"lcb cl",disabled:true,style:{opacity:.45,cursor:"not-allowed"}},"\ud83d\udcde"),
-React.createElement(l.phone?"a":"button",l.phone?{href:"sms:"+l.phone,className:"lcb go",style:{textDecoration:"none"},onClick:function(e){cpy(l.phone);e.preventDefault();window.open("sms:"+l.phone)}}:{type:"button",className:"lcb go",disabled:true,style:{opacity:.45,cursor:"not-allowed"}},"\ud83d\udcac"),
+React.createElement(l.phone?"a":"button",l.phone?{href:"tel:"+l.phone,className:"lcb cl",onClick:function(e){onCl();cpy(l.phone);e.preventDefault();window.open("tel:"+l.phone)}}:{type:"button",className:"lcb cl",title:"No phone — add contact info below",style:{opacity:.5,cursor:"pointer"},onClick:function(){toast("No phone on record. Enter contact info in the notes field or use a skip trace service.");}},"\ud83d\udcde"),
+React.createElement(l.phone?"a":"button",l.phone?{href:"sms:"+l.phone,className:"lcb go",style:{textDecoration:"none"},onClick:function(e){cpy(l.phone);e.preventDefault();window.open("sms:"+l.phone)}}:{type:"button",className:"lcb go",title:"No phone — skip trace needed",style:{opacity:.5,cursor:"pointer"},onClick:function(){toast("No phone on record. Use BatchSkipTracing.com or PropStream to get owner contact info.");}},"\ud83d\udcac"),
 React.createElement("button",{className:"lcb",onClick:onSc},"Script"),
 React.createElement("button",{className:"lcb",onClick:onDr},"Drip"),
 React.createElement("button",{className:"lcb",onClick:onDe},"\ud83e\uddee"),
@@ -260,6 +260,103 @@ const[buyersLoaded,setBuyersLoaded]=useState(false);
 const[addBuyerOpen,setAddBuyerOpen]=useState(false);
 const[newBuyer,setNewBuyer]=useState({name:"",company:"",buyer_type:"Fix & Flip",phone:"",email:"",price_min:"",price_max:"",criteria:"",locations:"",rehab_tolerance:"Medium",financing:"Cash",notes:""});
 const supabase=useMemo(function(){return createClient()},[]);
+// Markets + Automation state
+const[markets,setMarkets]=useState([]);
+const[autoSettings,setAutoSettings]=useState({auto_mode:false,frequency_hours:24,auto_buyers:true,auto_stage:true,auto_followup_days:3,auto_dead_days:21,last_auto_run:null});
+const[autoRunning,setAutoRunning]=useState(false);
+const[autoResult,setAutoResult]=useState(null);
+const[autoSettingsOpen,setAutoSettingsOpen]=useState(false);
+const[marketsOpen,setMarketsOpen]=useState(false);
+const[addMarketOpen,setAddMarketOpen]=useState(false);
+const[newMarket,setNewMarket]=useState({city:"",state:"",zip:"",county:"",price_range:"any price range",fee_target:"$10,000",lead_types:"Sellers Only",distress_filters:{}});
+const[discoverOpen,setDiscoverOpen]=useState(false);
+const[discoverCity,setDiscoverCity]=useState("");
+const[discoverState,setDiscoverState]=useState("");
+const[discoverRunning,setDiscoverRunning]=useState(false);
+const[discoverResult,setDiscoverResult]=useState(null);
+const[legalOpen,setLegalOpen]=useState(false);
+const[legalStateDetail,setLegalStateDetail]=useState(null);
+
+// Wholesale legality warnings by state
+// ── COMPREHENSIVE STATE LEGAL DATABASE ───────────────────────────
+// Levels: "danger" = license likely required | "warn" = caution/disclosure | "ok" = generally permitted
+// DISCLAIMER: This is general information only, NOT legal advice. Laws change frequently.
+// Always consult a licensed real estate attorney in the relevant state before wholesaling.
+const STATE_LEGAL={
+  // 🔴 HIGH RISK — License Likely Required or Actively Enforced
+  IL:{level:"danger",summary:"License Required",short:"IL requires a RE license for wholesale assignment (HB 1374, 2023).",detail:"Illinois HB 1374 (effective Jan 2024) significantly restricts wholesaling. Assigning a real estate purchase contract for profit without a real estate license may violate the Illinois Real Estate License Act. The Illinois REALTORS® have actively lobbied for enforcement. This is one of the most restrictive wholesale states in the country.",action:"Do NOT wholesale in Illinois without consulting a licensed Illinois real estate attorney. A real estate license may be required."},
+  OK:{level:"danger",summary:"License Required",short:"Oklahoma's RE License Code likely requires a license for wholesale assignment.",detail:"The Oklahoma Real Estate Commission has taken the position that assigning purchase contracts for compensation constitutes real estate brokerage requiring a license. Enforcement actions have occurred. Oklahoma is considered a high-risk state for unlicensed wholesaling.",action:"Obtain an Oklahoma real estate license or work with a licensed agent. Consult an OK attorney before any wholesale activity."},
+  SC:{level:"danger",summary:"License Likely Required",short:"SC RE Commission: Assignment-for-profit likely requires a license.",detail:"The South Carolina Real Estate Commission has issued guidance indicating that assigning contracts for profit likely constitutes real estate brokerage activity requiring licensure under SC Code § 40-57-30. Several enforcement actions have been taken against unlicensed wholesalers.",action:"Consult a South Carolina real estate attorney before proceeding. A license may be required for assignment-for-profit activities."},
+  // 🟡 CAUTION — Disclosure Required, Regulated, or Pending Legislation
+  GA:{level:"warn",summary:"Disclosure Required",short:"GA SB 44: Must disclose wholesaler status in all marketing & contracts.",detail:"Georgia SB 44 (signed 2022) requires anyone marketing or contracting to purchase real property for the purpose of assigning the contract for profit to clearly disclose their status as a 'real estate wholesaler' in all advertising, marketing, and in the purchase contract itself. Failure to disclose can result in contract voidability and civil penalties.",action:"Always include 'Seller acknowledges buyer is a real estate wholesaler' or equivalent language in all Georgia contracts and marketing materials."},
+  TX:{level:"warn",summary:"TREC Forms Required",short:"TX requires TREC-approved contract forms and has regulated wholesale assignment.",detail:"Texas requires use of Texas Real Estate Commission (TREC) promulgated contract forms for most residential real estate transactions. Wholesale assignments must use proper TREC forms with appropriate addenda. The Texas Occupations Code regulates when real estate licenses are required. Simultaneous closings (double closes) are common and generally permitted.",action:"Use TREC-approved forms exclusively. Use an Assignment of Contract addendum. Consult a TX real estate attorney for compliance."},
+  KY:{level:"warn",summary:"Legislation Pending",short:"KY has seen proposed bills targeting unlicensed wholesale activity.",detail:"Kentucky has seen proposed legislation (HB 406 and similar bills) that would require real estate licensure for wholesale activities. While not yet law at time of last update, the legislative trend indicates increased regulatory risk. Current Kentucky RE Commission guidance should be verified.",action:"Monitor current Kentucky legislation at ky.gov. Consult a KY real estate attorney for current requirements before proceeding."},
+  MD:{level:"warn",summary:"Disclosure & Restrictions Apply",short:"MD has disclosure requirements and some localities add restrictions.",detail:"Maryland has real estate disclosure requirements that apply to wholesale transactions. Montgomery County and other jurisdictions have adopted additional restrictions. The Maryland RE Commission has reviewed wholesale practices. Double closings are generally used to mitigate risk.",action:"Use written disclosures in all contracts. Consult a Maryland real estate attorney, particularly for transactions in Montgomery County or Baltimore City."},
+  NM:{level:"warn",summary:"Gray Area — Regulatory Attention",short:"NM RE Commission has questioned whether some wholesale practices require a license.",detail:"The New Mexico Real Estate Commission has reviewed whether assigning contracts for profit constitutes brokerage requiring licensure under NMSA 61-29. While no definitive ruling has been issued, the regulatory environment is uncertain. New Mexico is a smaller wholesale market with less legal precedent.",action:"Consult a New Mexico real estate attorney before any wholesale activity. Use double-close strategy to reduce risk."},
+  VA:{level:"warn",summary:"Disclosure Required",short:"VA requires disclosure of wholesale/assignment intent in purchase contracts.",detail:"Virginia has professional licensing requirements that can apply to real estate activities. While assignment of equitable interest is generally permitted, Virginia RE Board guidance recommends clear disclosure of wholesale intent. Some Northern Virginia markets have seen increased scrutiny.",action:"Include clear disclosure of assignment intent in all purchase contracts. Consult a Virginia real estate attorney for Northern VA transactions."},
+  NY:{level:"warn",summary:"Caution — License Gray Area",short:"NY's licensing laws create uncertainty for wholesale assignment-for-profit.",detail:"New York's Real Property Law and licensing statutes are broadly written and could be interpreted to require a license for some wholesale activities. The NY Department of State has jurisdiction over real estate licensee conduct. The 'finder's fee' model used in NYC is legally distinct from assignment of contracts.",action:"New York wholesale activity should be structured carefully. Consult a New York real estate attorney, especially for NYC and Long Island transactions."},
+  NJ:{level:"warn",summary:"Caution Advised",short:"NJ RE Commission has reviewed wholesale practices; some county restrictions apply.",detail:"New Jersey's Real Estate Commission has examined wholesale real estate practices. Certain disclosure requirements apply. Some counties have adopted additional restrictions or transfer taxes that affect wholesale deals.",action:"Consult a New Jersey real estate attorney. Ensure all required disclosures are included in purchase contracts."},
+  CA:{level:"warn",summary:"Complex — Disclosure & DRE Oversight",short:"CA has strict disclosure laws and the DRE monitors unlicensed brokerage activity.",detail:"California's Department of Real Estate (DRE) has broad jurisdiction and actively monitors real estate activities. While assigning equitable interest is generally permitted, California's disclosure requirements are extensive. The Unruh Civil Rights Act and other statutes add compliance layers. California transfer taxes can significantly affect deal economics.",action:"California wholesale requires careful legal structuring. Use entity-based ownership transfers or proper assignment disclosures. Consult a California real estate attorney."},
+  // 🟢 GENERALLY PERMITTED — Active Wholesale Markets
+  FL:{level:"ok",summary:"Generally Permitted",short:"FL is one of the most wholesaler-friendly states. No license required for contract assignment.",detail:"Florida is widely considered the most favorable state for wholesale real estate. Assigning equitable interest in a purchase contract is clearly permitted without a real estate license under Florida law. The Florida RE Commission has not taken action against properly structured wholesale assignments. Proper disclosure of assignment intent is recommended.",action:"Include assignment disclosure in contracts. Consider 'and/or assigns' language in buyer name. No license required."},
+  AZ:{level:"ok",summary:"Generally Permitted",short:"AZ is highly wholesaler-friendly with no specific licensing for assignment.",detail:"Arizona is one of the top wholesale markets in the country (Phoenix metro). The Arizona Department of Real Estate permits assignment of purchase contracts without a real estate license. Double closes and simultaneous closings are common and well-accepted by title companies.",action:"Use standard Arizona purchase contract with assignment addendum. AZ title companies are experienced with wholesale transactions."},
+  NV:{level:"ok",summary:"Generally Permitted",short:"NV permits wholesale assignment without a license. Las Vegas is a major market.",detail:"Nevada permits assignment of real estate purchase contracts without a real estate license. The Nevada RE Division has not taken action against properly structured wholesale assignments. Las Vegas and Henderson are among the most active wholesale markets nationally.",action:"Use standard NV purchase contract. Include assignment clause. Work with wholesale-friendly title companies in Las Vegas."},
+  OH:{level:"ok",summary:"Generally Permitted",short:"OH is a major wholesale market with no specific licensing for assignment.",detail:"Ohio is one of the top 5 wholesale markets in the country. Cleveland, Columbus, Cincinnati, and Dayton all have very active wholesale activity. The Ohio Division of Real Estate permits contract assignment without a license.",action:"Use standard Ohio purchase contract with assignment language. Ohio title companies routinely handle wholesale closings."},
+  IN:{level:"ok",summary:"Generally Permitted",short:"IN permits wholesale assignment; Indianapolis is a major market.",detail:"Indiana is very wholesaler-friendly. Indianapolis consistently ranks among the top wholesale markets in the nation. The Indiana Professional Licensing Agency does not require a license for contract assignment.",action:"Standard wholesale contracts are well-accepted by Indiana title companies. Indianapolis has several title companies specializing in wholesale closings."},
+  TN:{level:"ok",summary:"Generally Permitted",short:"TN permits wholesale assignment; Nashville and Memphis are active markets.",detail:"Tennessee is an active wholesale market, particularly Nashville (hot market) and Memphis (high cash buyer activity). The Tennessee RE Commission permits contract assignment without a license.",action:"Use standard purchase contract with assignment clause. Memphis in particular has a large cash buyer network due to high investor activity."},
+  NC:{level:"ok",summary:"Generally Permitted",short:"NC permits wholesale assignment; Charlotte and Raleigh are major markets.",detail:"North Carolina permits assignment of real estate purchase contracts. Charlotte and the Research Triangle (Raleigh/Durham) are growing wholesale markets. NC RE Commission has not taken enforcement actions against properly structured wholesale deals.",action:"Use standard NC purchase contract. Include assignment language. Some closing attorneys specialize in wholesale transactions in Charlotte."},
+  MO:{level:"ok",summary:"Generally Permitted",short:"MO permits wholesale; Kansas City and St. Louis are established markets.",detail:"Missouri is wholesale-friendly. Kansas City is one of the most active wholesale markets in the Midwest. The Missouri RE Commission permits contract assignment without a license.",action:"Standard wholesale contracts are accepted. Kansas City has a well-established network of title companies handling wholesale closings."},
+  MI:{level:"ok",summary:"Generally Permitted",short:"MI permits wholesale assignment; Detroit metro is a major market.",detail:"Michigan permits contract assignment without a license. Detroit, Grand Rapids, and Flint are active wholesale markets. Michigan's post-2008 housing market created a strong wholesale ecosystem that remains active.",action:"Standard wholesale contracts. Michigan title companies in Detroit metro routinely handle wholesale deals."},
+  PA:{level:"ok",summary:"Generally Permitted",short:"PA permits wholesale; Philadelphia and Pittsburgh are active markets.",detail:"Pennsylvania permits assignment of purchase contracts. Philadelphia is one of the most active wholesale markets on the East Coast. Pittsburgh also has significant wholesale activity. Pennsylvania RE Commission permits contract assignment without a license.",action:"Standard wholesale purchase contracts. Philadelphia has many title companies experienced with wholesale closings."},
+  CO:{level:"ok",summary:"Generally Permitted",short:"CO permits wholesale; Denver metro is a top national market.",detail:"Colorado permits contract assignment without a real estate license. Denver and the Front Range are among the most active wholesale markets in the country. Colorado RE Commission does not require a license for assignment of equitable interest.",action:"Use Colorado standard contract forms with assignment addendum. Denver title companies are very familiar with wholesale transactions."},
+  TX:{level:"warn",summary:"TREC Forms Required",short:"TX requires TREC-approved contract forms. See caution above.",detail:"See caution details above.",action:"Use TREC-approved forms exclusively."},
+  AL:{level:"ok",summary:"Generally Permitted",short:"Alabama permits wholesale contract assignment without a license.",detail:"Alabama is wholesaler-friendly. Birmingham and Huntsville are growing wholesale markets. The Alabama RE Commission permits contract assignment without a license.",action:"Standard wholesale contracts. Birmingham title companies handle wholesale closings."},
+  AR:{level:"ok",summary:"Generally Permitted",short:"Arkansas permits wholesale assignment. Little Rock is the primary market.",detail:"Arkansas permits contract assignment without a license. Little Rock has a growing wholesale community. The Arkansas RE Commission does not specifically restrict contract assignment.",action:"Standard wholesale purchase contracts. Work with local RE attorneys for closings."},
+  MS:{level:"ok",summary:"Generally Permitted",short:"Mississippi permits wholesale assignment. Jackson is the primary market.",detail:"Mississippi permits contract assignment without a license. Jackson and the Gulf Coast have wholesale activity. The Mississippi RE Commission does not specifically restrict assignment of contracts.",action:"Standard wholesale contracts. Work with local title companies or closing attorneys."},
+  LA:{level:"ok",summary:"Generally Permitted",short:"Louisiana permits wholesale; New Orleans and Baton Rouge are active markets.",detail:"Louisiana (a civil law state) permits contract assignment. New Orleans and Baton Rouge are active wholesale markets. Louisiana uses 'acts of sale' rather than deeds, so closing procedures differ from common law states.",action:"Work with a Louisiana real estate attorney familiar with assignment of contracts. Louisiana closings require a notary/attorney."},
+  WI:{level:"ok",summary:"Generally Permitted",short:"Wisconsin permits wholesale assignment; Milwaukee is the primary market.",detail:"Wisconsin permits contract assignment without a license. Milwaukee has significant wholesale activity. The Wisconsin RE Examining Board does not require a license for contract assignment.",action:"Standard wholesale contracts. Milwaukee title companies handle wholesale closings."},
+  MN:{level:"ok",summary:"Generally Permitted",short:"Minnesota permits wholesale; Minneapolis-St. Paul is the primary market.",detail:"Minnesota permits contract assignment without a license. The Twin Cities metro has an active wholesale community. Minnesota RE Commission does not restrict properly structured wholesale assignments.",action:"Standard wholesale contracts. Minneapolis has title companies experienced with wholesale."},
+  IA:{level:"ok",summary:"Generally Permitted",short:"Iowa permits wholesale assignment; Des Moines is the primary market.",detail:"Iowa permits contract assignment without a license. Des Moines has a growing wholesale market. The Iowa RE Commission does not specifically restrict contract assignment.",action:"Standard wholesale purchase contracts."},
+  KS:{level:"ok",summary:"Generally Permitted",short:"Kansas permits wholesale; Kansas City (KS side) and Wichita are markets.",detail:"Kansas permits contract assignment without a license. The Kansas City metro (Kansas side) and Wichita have wholesale activity.",action:"Standard wholesale contracts."},
+  NE:{level:"ok",summary:"Generally Permitted",short:"Nebraska permits wholesale; Omaha is the primary market.",detail:"Nebraska permits contract assignment without a license. Omaha has an active wholesale community. Nebraska RE Commission does not restrict properly structured wholesale assignments.",action:"Standard wholesale purchase contracts."},
+  SD:{level:"ok",summary:"Generally Permitted",short:"South Dakota permits wholesale assignment.",detail:"South Dakota permits contract assignment without a license. Sioux Falls is the primary market. Very wholesale-friendly regulatory environment.",action:"Standard wholesale contracts."},
+  ND:{level:"ok",summary:"Generally Permitted",short:"North Dakota permits wholesale assignment. Fargo is the primary market.",detail:"North Dakota permits contract assignment without a license. Fargo-Moorhead is the primary wholesale market. The state has a very small wholesale community.",action:"Standard wholesale contracts. Work with local RE attorneys for closings."},
+  MT:{level:"ok",summary:"Generally Permitted",short:"Montana permits wholesale assignment; Billings and Missoula are markets.",detail:"Montana permits contract assignment without a license. Billings and Missoula have some wholesale activity. Montana is a smaller market with growing investor interest.",action:"Standard wholesale contracts. Montana closings typically done through title companies or attorneys."},
+  WY:{level:"ok",summary:"Generally Permitted",short:"Wyoming permits wholesale assignment; Cheyenne and Casper are markets.",detail:"Wyoming permits contract assignment without a license. Wyoming has a very small wholesale community. The state's minimal regulation makes it legally straightforward.",action:"Standard wholesale purchase contracts."},
+  ID:{level:"ok",summary:"Generally Permitted",short:"Idaho permits wholesale; Boise is a fast-growing market.",detail:"Idaho permits contract assignment without a license. Boise has emerged as one of the fastest-growing wholesale markets in the country due to rapid population growth.",action:"Standard wholesale contracts. Boise title companies handle wholesale closings."},
+  OR:{level:"ok",summary:"Generally Permitted",short:"Oregon permits wholesale; Portland is the primary market.",detail:"Oregon permits contract assignment without a license. Portland has a wholesale community, though the hot seller's market has reduced deal flow. Oregon RE Agency does not restrict contract assignment.",action:"Standard wholesale purchase contracts. Work with Portland-area title companies."},
+  WA:{level:"ok",summary:"Generally Permitted",short:"Washington permits wholesale; Seattle metro is the primary market.",detail:"Washington state permits contract assignment without a license. Seattle and Tacoma have active wholesale markets, though competitive markets mean thinner margins. Washington RE Commission does not restrict contract assignment.",action:"Standard wholesale contracts. Washington title companies are familiar with wholesale transactions."},
+  UT:{level:"ok",summary:"Generally Permitted",short:"Utah permits wholesale; Salt Lake City is a growing market.",detail:"Utah permits contract assignment without a license. Salt Lake City and Provo have growing wholesale markets. Utah RE Division does not restrict properly structured wholesale assignments.",action:"Standard wholesale contracts. Salt Lake title companies handle wholesale closings."},
+  HI:{level:"ok",summary:"Generally Permitted — Limited Market",short:"Hawaii permits wholesale but high prices limit deal flow.",detail:"Hawaii permits contract assignment without a license. The extremely high property values in Hawaii (especially Honolulu) make traditional wholesale difficult. Creative financing and niche distressed properties are the typical approach.",action:"Standard wholesale contracts. Work with a Hawaii real estate attorney given the unique market conditions."},
+  AK:{level:"ok",summary:"Generally Permitted — Limited Market",short:"Alaska permits wholesale; Anchorage is the primary market.",detail:"Alaska permits contract assignment without a license. Anchorage has a small but active wholesale community. Alaska RE Commission does not restrict contract assignment.",action:"Standard wholesale contracts. Work with Anchorage-area title companies."},
+  CT:{level:"ok",summary:"Generally Permitted",short:"Connecticut permits wholesale; Hartford and Bridgeport are markets.",detail:"Connecticut permits contract assignment without a license. Hartford and the state's distressed markets offer wholesale opportunities. CT RE Commission does not restrict contract assignment.",action:"Standard wholesale contracts. Work with Connecticut title companies or real estate attorneys (closings typically attorney-handled in CT)."},
+  DE:{level:"ok",summary:"Generally Permitted",short:"Delaware permits wholesale; Wilmington is the primary market.",detail:"Delaware permits contract assignment without a license. Wilmington and surrounding areas have wholesale activity. Delaware's business-friendly environment extends to real estate investing.",action:"Standard wholesale contracts. Delaware closings handled by attorneys."},
+  ME:{level:"ok",summary:"Generally Permitted",short:"Maine permits wholesale; Portland (ME) is the primary market.",detail:"Maine permits contract assignment without a license. Portland (Maine) and surrounding areas have growing wholesale activity as remote work drives demand.",action:"Standard wholesale contracts. Maine closings typically handled by attorneys."},
+  NH:{level:"ok",summary:"Generally Permitted",short:"New Hampshire permits wholesale; Manchester and Nashua are markets.",detail:"New Hampshire permits contract assignment without a license. Southern NH (Manchester, Nashua, Concord) has wholesale activity driven by the Boston market spillover.",action:"Standard wholesale contracts. NH closings handled by title companies or attorneys."},
+  VT:{level:"ok",summary:"Generally Permitted — Limited Market",short:"Vermont permits wholesale; Burlington is the primary market.",detail:"Vermont permits contract assignment without a license. The Vermont market is very limited due to low population and high property values relative to income. Very small wholesale community.",action:"Standard wholesale contracts. Vermont closings typically handled by attorneys."},
+  RI:{level:"ok",summary:"Generally Permitted",short:"Rhode Island permits wholesale; Providence is the primary market.",detail:"Rhode Island permits contract assignment without a license. Providence has a small but active wholesale community. RI RE Commission does not restrict contract assignment.",action:"Standard wholesale contracts. Rhode Island closings typically handled by attorneys."},
+  MA:{level:"ok",summary:"Generally Permitted — Disclosure Advised",short:"Massachusetts permits wholesale; Boston area and Springfield are markets.",detail:"Massachusetts permits contract assignment without a license. However, Massachusetts has strict consumer protection laws (Chapter 93A) that require good faith dealing. Clear disclosure of wholesale intent is strongly recommended. Western MA (Springfield, Worcester) has lower price points more amenable to wholesale.",action:"Include clear disclosure of assignment intent. Consult a MA real estate attorney. Boston-area title companies handle wholesale."},
+  WV:{level:"ok",summary:"Generally Permitted",short:"West Virginia permits wholesale; Charleston and Huntington are markets.",detail:"West Virginia permits contract assignment without a license. Charleston and Huntington have distressed property wholesale opportunities. WV RE Commission does not restrict contract assignment.",action:"Standard wholesale contracts. WV closings handled by title companies or attorneys."},
+};
+
+// Map old WHOLESALE_WARNINGS reference to STATE_LEGAL for backward compat
+const WHOLESALE_WARNINGS=STATE_LEGAL;
+
+const US_STATES=[
+  {c:"AL",n:"Alabama"},{c:"AK",n:"Alaska"},{c:"AZ",n:"Arizona"},{c:"AR",n:"Arkansas"},
+  {c:"CA",n:"California"},{c:"CO",n:"Colorado"},{c:"CT",n:"Connecticut"},{c:"DE",n:"Delaware"},
+  {c:"FL",n:"Florida"},{c:"GA",n:"Georgia"},{c:"HI",n:"Hawaii"},{c:"ID",n:"Idaho"},
+  {c:"IL",n:"Illinois"},{c:"IN",n:"Indiana"},{c:"IA",n:"Iowa"},{c:"KS",n:"Kansas"},
+  {c:"KY",n:"Kentucky"},{c:"LA",n:"Louisiana"},{c:"ME",n:"Maine"},{c:"MD",n:"Maryland"},
+  {c:"MA",n:"Massachusetts"},{c:"MI",n:"Michigan"},{c:"MN",n:"Minnesota"},{c:"MS",n:"Mississippi"},
+  {c:"MO",n:"Missouri"},{c:"MT",n:"Montana"},{c:"NE",n:"Nebraska"},{c:"NV",n:"Nevada"},
+  {c:"NH",n:"New Hampshire"},{c:"NJ",n:"New Jersey"},{c:"NM",n:"New Mexico"},{c:"NY",n:"New York"},
+  {c:"NC",n:"North Carolina"},{c:"ND",n:"North Dakota"},{c:"OH",n:"Ohio"},{c:"OK",n:"Oklahoma"},
+  {c:"OR",n:"Oregon"},{c:"PA",n:"Pennsylvania"},{c:"RI",n:"Rhode Island"},{c:"SC",n:"South Carolina"},
+  {c:"SD",n:"South Dakota"},{c:"TN",n:"Tennessee"},{c:"TX",n:"Texas"},{c:"UT",n:"Utah"},
+  {c:"VT",n:"Vermont"},{c:"VA",n:"Virginia"},{c:"WA",n:"Washington"},{c:"WV",n:"West Virginia"},
+  {c:"WI",n:"Wisconsin"},{c:"WY",n:"Wyoming"}
+];
 
 async function authedJson(endpoint,payload,method){
 var sessionResult=await supabase.auth.getSession();
@@ -284,6 +381,86 @@ if(Array.isArray(data?.buyers))setDbBuyers(data.buyers);
 }catch(e){console.warn("buyers load:",e?.message)}finally{setBuyersLoaded(true)}
 })();
 },[userId]);
+
+// Load markets + automation settings, then check if auto-run is due
+useEffect(function(){
+if(!userId)return;
+(async function(){
+try{
+var [mData,aData]=await Promise.all([
+authedJson("/api/markets",undefined,"GET"),
+authedJson("/api/automation/settings",undefined,"GET")
+]);
+if(Array.isArray(mData?.markets))setMarkets(mData.markets);
+if(aData?.settings)setAutoSettings(aData.settings);
+// Check if auto-run is due
+var s=aData?.settings;
+if(s?.auto_mode&&s?.frequency_hours){
+var lastRun=s.last_auto_run?new Date(s.last_auto_run):null;
+var hoursSince=lastRun?(Date.now()-lastRun.getTime())/3600000:999;
+if(hoursSince>=s.frequency_hours){
+runAutoResearch(true);
+}
+}
+}catch(e){console.warn("markets/auto load:",e?.message)}
+})();
+},[userId]);
+
+async function saveAutoSettings(updates){
+var merged=Object.assign({},autoSettings,updates);
+setAutoSettings(merged);
+try{await authedJson("/api/automation/settings",merged)}catch(e){toast("Settings save failed.")}
+}
+
+async function saveMarket(){
+if(!newMarket.city||!newMarket.state){toast("City and state required.");return;}
+try{
+var payload=Object.assign({},newMarket,{lead_types:[newMarket.lead_types||"Sellers Only"]});
+var data=await authedJson("/api/markets",payload);
+if(data.market)setMarkets(function(prev){return[].concat(prev,[data.market])});
+setAddMarketOpen(false);
+setNewMarket({city:"",state:"FL",zip:"",county:"",price_range:"any price range",fee_target:"$10,000",lead_types:"Sellers Only",distress_filters:{}});
+toast("Market added!");
+}catch(e){toast("Failed: "+(e?.message||"error"))}
+}
+
+async function deleteMarket(id){
+try{
+await authedJson("/api/markets?id="+id,undefined,"DELETE");
+setMarkets(function(prev){return prev.filter(function(m){return m.id!==id})});
+toast("Market removed.");
+}catch(e){toast("Delete failed.")}
+}
+
+async function runAutoResearch(silent){
+if(autoRunning)return;
+setAutoRunning(true);
+if(!silent)toast("Auto-research running…");
+try{
+var data=await authedJson("/api/automation/run",{});
+setAutoResult(data);
+if(!silent)toast(data.message||("Done: "+data.newLeads+" new leads, "+data.newBuyers+" buyers"));
+// Reload buyers and trigger leads reload signal
+var bData=await authedJson("/api/buyers",undefined,"GET");
+if(Array.isArray(bData?.buyers))setDbBuyers(bData.buyers);
+}catch(e){
+if(!silent)toast("Auto-research failed: "+(e?.message||"error"));
+}finally{setAutoRunning(false)}
+}
+
+async function runDiscoverBuyers(){
+if(!discoverCity||!discoverState){toast("Enter city and state first.");return;}
+setDiscoverRunning(true);
+setDiscoverResult(null);
+try{
+var data=await authedJson("/api/buyers/discover",{city:discoverCity,state:discoverState});
+setDiscoverResult(data);
+toast(data.message||("Found "+data.count+" buyers"));
+var bData=await authedJson("/api/buyers",undefined,"GET");
+if(Array.isArray(bData?.buyers))setDbBuyers(bData.buyers);
+}catch(e){toast("Discovery failed: "+(e?.message||"error"))}
+finally{setDiscoverRunning(false)}
+}
 
 // Real comps fetcher
 async function fetchRealComps(lead){
@@ -638,7 +815,18 @@ React.createElement("div",{className:"logo-title"},"LeadForge PRO"),
 React.createElement("div",{className:"logo-subtitle"},"Lead generation, acquisitions, and disposition pipeline")
 )
 )),
-React.createElement("div",{className:"nav-tabs"},TABS.map(function(t,i){return React.createElement("button",{key:i,className:"ntab"+(tab===i?" on":""),onClick:function(){setTab(i)}},t,i===1&&leads.length>0&&React.createElement("span",{className:"nbadge"},leads.length),i===6&&leads.length>0&&React.createElement("span",{className:"nbadge g"},"Go"))}))
+React.createElement("div",{className:"nav-tabs"},TABS.map(function(t,i){return React.createElement("button",{key:i,className:"ntab"+(tab===i?" on":""),onClick:function(){setTab(i)}},t,i===1&&leads.length>0&&React.createElement("span",{className:"nbadge"},leads.length),i===6&&leads.length>0&&React.createElement("span",{className:"nbadge g"},"Go"))})),
+React.createElement("button",{
+  className:"ntab",
+  style:{marginLeft:"auto",opacity:.7,fontSize:".72rem"},
+  title:"Wholesale legality by state",
+  onClick:function(){setLegalStateDetail(null);setLegalOpen(true)}
+},"\u2696\ufe0f Legal"),
+React.createElement("button",{
+  className:"ntab",
+  style:{opacity:.7,fontSize:".72rem"},
+  onClick:function(){supabase.auth.signOut().then(function(){window.location.reload();})}
+},"\ud83d\udeaa Sign Out")
 ),
 
 // CONTENT - simplified version showing key new features
@@ -749,6 +937,21 @@ leads.map(function(l){var steps=bDrip(l,loc),done=l.dripDone||[];return React.cr
 
 // Tab 3: BUYERS (loaded from database)
 tab===3&&React.createElement("div",{className:"pg"},React.createElement("div",{className:"pg-t"},"Cash Buyer\u2019s List"),React.createElement("div",{className:"pg-s"},"Your buyer database. Auto-matched against your pipeline leads."),
+React.createElement("div",{style:{display:"flex",gap:".5rem",flexWrap:"wrap",marginBottom:"1rem"}},
+React.createElement("button",{className:"btn btn-gd btn-sm",onClick:function(){setAddBuyerOpen(true)}},"\u2795 Add Buyer"),
+React.createElement("button",{className:"btn btn-dk btn-sm",onClick:function(){setDiscoverOpen(function(o){return!o})},style:{background:"rgba(201,168,76,.15)",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)"}},"\ud83d\udd0d Discover Buyers"),
+autoRunning&&React.createElement("span",{style:{alignSelf:"center",fontSize:".75rem",color:"var(--mut)"}},"Auto-research running…")),
+discoverOpen&&React.createElement("div",{className:"card",style:{marginBottom:"1rem",border:"1px solid rgba(201,168,76,.25)"}},
+React.createElement("div",{className:"ctitle",style:{color:"var(--gold)"}},"🔍 Discover Cash Buyers"),
+React.createElement("div",{style:{fontSize:".78rem",color:"var(--mut)",marginBottom:".7rem"}},"Search for active cash buyers and investor companies in any market. We pull from web search, RentCast property records, and recent cash sales."),
+React.createElement("div",{style:{display:"flex",gap:".5rem",marginBottom:".6rem",flexWrap:"wrap"}},
+React.createElement("input",{className:"inp",placeholder:"City *",value:discoverCity,onChange:function(e){setDiscoverCity(e.target.value)},style:{flex:2,minWidth:120}}),
+React.createElement("select",{className:"inp",value:discoverState,onChange:function(e){setDiscoverState(e.target.value)},style:{flex:1,minWidth:80}},
+React.createElement("option",{value:""},"— Select State —"),US_STATES.map(function(s){return React.createElement("option",{key:s.c,value:s.c},(STATE_LEGAL[s.c]?.level==="danger"?"🔴 ":STATE_LEGAL[s.c]?.level==="warn"?"🟡 ":"🟢 ")+s.n+" ("+s.c+")")})),
+React.createElement("button",{className:"btn btn-dk",disabled:discoverRunning,onClick:runDiscoverBuyers,style:{flexShrink:0}},discoverRunning?"\u23f3 Searching…":"Find Buyers")),
+STATE_LEGAL[discoverState]&&STATE_LEGAL[discoverState].level!=="ok"&&React.createElement("div",{style:{padding:".5rem .7rem",background:STATE_LEGAL[discoverState].level==="danger"?"rgba(220,50,50,.1)":"rgba(220,160,50,.1)",border:"1px solid "+(STATE_LEGAL[discoverState].level==="danger"?"#e05050":"#c9a84c"),borderRadius:6,fontSize:".73rem",color:STATE_LEGAL[discoverState].level==="danger"?"#ff8080":"var(--gold)",marginBottom:".6rem",cursor:"pointer"},onClick:function(){setLegalStateDetail(discoverState);setLegalOpen(true)}},
+(STATE_LEGAL[discoverState].level==="danger"?"\ud83d\udd34 ":"\ud83d\udfe1 "),STATE_LEGAL[discoverState].short," ",React.createElement("span",{style:{textDecoration:"underline",opacity:.7}},"Learn more")),
+discoverResult&&React.createElement("div",{style:{padding:".5rem .7rem",background:"rgba(255,255,255,.04)",borderRadius:6,fontSize:".8rem",color:"var(--gold)"}},"\u2713 ",discoverResult.message||("Found "+discoverResult.count+" buyers — saved to your list"))),
 React.createElement("button",{className:"btn btn-gd btn-sm",style:{marginBottom:"1rem"},onClick:function(){setAddBuyerOpen(true)}},"\u2795 Add Buyer"),
 addBuyerOpen&&React.createElement("div",{className:"card",style:{marginBottom:"1rem"}},
 React.createElement("div",{className:"ctitle"},"\u2795 New Buyer"),
@@ -787,7 +990,81 @@ return React.createElement("div",{className:"pg"},React.createElement("div",{cla
 tab===6&&React.createElement("div",{className:"pg"},React.createElement("div",{className:"pg-t"},"\u26a1 Command Center"),React.createElement("div",{className:"pg-s"},"Your daily action plan."),
 React.createElement("div",{className:"ccrd"},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:".4rem"}},React.createElement("div",{style:{fontFamily:"var(--sm)",fontSize:".5rem",letterSpacing:".16em",color:"var(--mut)",textTransform:"uppercase"}},"Monthly Goal"),React.createElement("div",{style:{fontFamily:"var(--sf)",fontWeight:900,fontSize:"1rem",color:"var(--gold)"}},fmt(cEarn)," ",React.createElement("span",{style:{fontSize:".7rem",fontWeight:400,color:"var(--mut)"}},"of ",fmt(mGoal)))),React.createElement("div",{className:"gbar"},React.createElement("div",{className:"gfill",style:{width:gPct+"%"}})),React.createElement("div",{style:{fontSize:".7rem",color:"var(--mut)"}},gPct,"% \u00b7 ",tracker.length," closed")),
 dig.length>0?React.createElement("div",{className:"cp"},React.createElement("div",{style:{fontFamily:"var(--sm)",fontSize:".5rem",letterSpacing:".2em",color:"var(--gold)",textTransform:"uppercase",marginBottom:".8rem"}},"\ud83c\udfaf Today\u2019s Top Contacts"),dig.map(function(l,i){return React.createElement("div",{className:"pr",key:l.id},React.createElement("div",{className:"pr-n"},i+1),React.createElement("div",{className:"pr-i"},React.createElement("div",{className:"pr-nm"},l.name),React.createElement("div",{style:{fontSize:".73rem",color:"var(--mut)",marginTop:".1rem"}},l.propertyStreet||l.area),React.createElement("div",{className:"pr-w"},"Score ",l._s," \u00b7 ",l.type,!l.lastContacted?" \u00b7 \u26a1":"")),React.createElement("div",{style:{display:"flex",gap:".35rem",flexShrink:0}},React.createElement("a",{href:"tel:"+l.phone,style:{padding:".35rem .6rem",background:"var(--gold)",color:"var(--fg)",borderRadius:4,fontSize:".68rem",fontWeight:700,textDecoration:"none"}},"\ud83d\udcde"),React.createElement("button",{onClick:function(){setModal({t:"sc",l:l})},style:{padding:".35rem .5rem",background:"transparent",border:"1px solid rgba(255,255,255,.1)",color:"var(--mut)",borderRadius:4,fontSize:".65rem",cursor:"pointer"}},"\ud83d\udcdd")))})):React.createElement("div",{className:"ccrd",style:{textAlign:"center",padding:"1.5rem"}},React.createElement("div",{style:{fontSize:"1.5rem",marginBottom:".5rem"}},"\ud83c\udfaf"),React.createElement("div",{style:{color:"var(--mut)"}},"Generate leads first."),React.createElement("button",{className:"btn btn-dk btn-sm",style:{marginTop:".7rem"},onClick:function(){setTab(0)}},"Leads \u2192")),
-React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem",alignItems:"start"}},React.createElement("div",{className:"ccrd"},React.createElement("div",{className:"ctitle"},"\u26a1 Tasks"),autoT.length===0?React.createElement("div",{style:{fontSize:".8rem",color:"var(--mut)"}},"All caught up!"):autoT.map(function(t){return React.createElement("div",{className:"tr",key:t.id,onClick:function(){setTasks(function(p){return Object.assign({},p,{[t.id]:!p[t.id]})})}},React.createElement("div",{className:"tch"+(tasks[t.id]?" dn":"")},tasks[t.id]&&React.createElement("span",{style:{color:"#fff",fontSize:".6rem",fontWeight:900}},"\u2713")),React.createElement("div",{className:"ttx"+(tasks[t.id]?" dn":"")},t.text,React.createElement("span",{className:"tbd "+(t.b==="hot"?"tbd-h":"tbd-a")},t.b==="hot"?"Urgent":"Auto")))})),React.createElement("div",{className:"ccrd"},React.createElement("div",{className:"ctitle"},"\ud83d\udcc8 30-Day"),React.createElement("div",{className:"rvg"},React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},actD.length),React.createElement("div",{className:"rpb-l"},"Active")),React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},fmt2(actD.length*fN*.45)),React.createElement("div",{className:"rpb-l"},"Proj. Fees")),React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},unc),React.createElement("div",{className:"rpb-l"},"Uncalled")))))),
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem",alignItems:"start"}},React.createElement("div",{className:"ccrd"},React.createElement("div",{className:"ctitle"},"\u26a1 Tasks"),autoT.length===0?React.createElement("div",{style:{fontSize:".8rem",color:"var(--mut)"}},"All caught up!"):autoT.map(function(t){return React.createElement("div",{className:"tr",key:t.id,onClick:function(){setTasks(function(p){return Object.assign({},p,{[t.id]:!p[t.id]})})}},React.createElement("div",{className:"tch"+(tasks[t.id]?" dn":"")},tasks[t.id]&&React.createElement("span",{style:{color:"#fff",fontSize:".6rem",fontWeight:900}},"\u2713")),React.createElement("div",{className:"ttx"+(tasks[t.id]?" dn":"")},t.text,React.createElement("span",{className:"tbd "+(t.b==="hot"?"tbd-h":"tbd-a")},t.b==="hot"?"Urgent":"Auto")))})),React.createElement("div",{className:"ccrd"},React.createElement("div",{className:"ctitle"},"\ud83d\udcc8 30-Day"),React.createElement("div",{className:"rvg"},React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},actD.length),React.createElement("div",{className:"rpb-l"},"Active")),React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},fmt2(actD.length*fN*.45)),React.createElement("div",{className:"rpb-l"},"Proj. Fees")),React.createElement("div",{className:"rpb"},React.createElement("div",{className:"rpb-n"},unc),React.createElement("div",{className:"rpb-l"},"Uncalled")))))))
+
+,
+
+// ── MARKETS MANAGER ──────────────────────────────────────────────
+React.createElement("div",{className:"acc gn",style:{marginTop:"1rem"}},
+React.createElement("div",{className:"acc-h gb",onClick:function(){setMarketsOpen(function(o){return!o})}},
+React.createElement("div",{className:"acc-l"},React.createElement("span",null,"\ud83c\udf0e"),React.createElement("div",null,React.createElement("div",{className:"acc-t g"},"Target Markets"),React.createElement("div",{className:"acc-s g"},markets.length===0?"No markets configured — add one to enable auto-research":markets.length+" market"+(markets.length!==1?"s":"")+" configured"))),
+React.createElement("span",{className:"acc-c"+(marketsOpen?" o":"")},"\u25bc")),
+marketsOpen&&React.createElement("div",{className:"acc-b gb"},
+markets.length===0&&React.createElement("div",{style:{color:"var(--mut)",fontSize:".8rem",marginBottom:".8rem"}},"Add your target markets below. LeadForge PRO will auto-research leads and buyers in each market."),
+markets.map(function(m){return React.createElement("div",{key:m.id,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:".5rem .7rem",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:6,marginBottom:".4rem"}},
+React.createElement("div",null,
+React.createElement("div",{style:{fontWeight:700,fontSize:".88rem"}},m.city+", "+m.state+(m.zip?" "+m.zip:"")),
+React.createElement("div",{style:{fontSize:".72rem",color:"var(--mut)"}},m.price_range+" \u00b7 Fee: "+m.fee_target+(m.last_researched?" \u00b7 Last: "+new Date(m.last_researched).toLocaleDateString():" \u00b7 Not yet run"))),
+React.createElement("button",{onClick:function(){deleteMarket(m.id)},style:{background:"transparent",border:"none",color:"#e05050",cursor:"pointer",fontSize:"1rem",padding:".2rem .4rem"}},"\u2715"));}),
+addMarketOpen?React.createElement("div",{style:{marginTop:".8rem",display:"grid",gridTemplateColumns:"1fr 1fr",gap:".5rem"}},
+React.createElement("input",{className:"inp",placeholder:"City *",value:newMarket.city,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{city:e.target.value})})}}),
+React.createElement("select",{className:"inp",value:newMarket.state,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{state:e.target.value})})}},
+React.createElement("option",{value:""},"— Select State —"),US_STATES.map(function(s){return React.createElement("option",{key:s.c,value:s.c},(STATE_LEGAL[s.c]?.level==="danger"?"🔴 ":STATE_LEGAL[s.c]?.level==="warn"?"🟡 ":"🟢 ")+s.n+" ("+s.c+")")})),
+React.createElement("input",{className:"inp",placeholder:"ZIP (optional)",value:newMarket.zip,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{zip:e.target.value})})}}),
+React.createElement("select",{className:"inp",value:newMarket.price_range,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{price_range:e.target.value})})}},
+["any price range","under $300K","$300K\u2013$600K","$600K\u2013$1M","luxury $1M+"].map(function(r){return React.createElement("option",{key:r,value:r},r)})),
+React.createElement("select",{className:"inp",value:newMarket.fee_target,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{fee_target:e.target.value})})}},
+["$5,000","$8,000","$10,000","$15,000","$20,000"].map(function(f){return React.createElement("option",{key:f,value:f},f)})),
+React.createElement("select",{className:"inp",value:newMarket.lead_types,onChange:function(e){setNewMarket(function(p){return Object.assign({},p,{lead_types:e.target.value})})}},
+["Sellers Only","Buyers Only","Buyers and Sellers","Distressed Only"].map(function(t){return React.createElement("option",{key:t,value:t},t)})),
+STATE_LEGAL[newMarket.state]&&STATE_LEGAL[newMarket.state].level!=="ok"&&React.createElement("div",{style:{gridColumn:"1/-1",padding:".6rem .8rem",background:STATE_LEGAL[newMarket.state].level==="danger"?"rgba(220,50,50,.15)":"rgba(220,160,50,.12)",border:"1px solid "+(STATE_LEGAL[newMarket.state].level==="danger"?"#e05050":"#c9a84c"),borderRadius:6,fontSize:".75rem",color:STATE_LEGAL[newMarket.state].level==="danger"?"#ff8080":"var(--gold)",cursor:"pointer"},onClick:function(){setLegalStateDetail(newMarket.state);setLegalOpen(true)}},
+(STATE_LEGAL[newMarket.state].level==="danger"?"\ud83d\udd34 ":"\ud83d\udfe1 "),STATE_LEGAL[newMarket.state].short," ",React.createElement("span",{style:{textDecoration:"underline",opacity:.7}},"View full legal details")),
+React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",gap:".5rem"}},
+React.createElement("button",{className:"btn btn-dk",onClick:saveMarket},"Add Market"),
+React.createElement("button",{className:"btn",style:{opacity:.6},onClick:function(){setAddMarketOpen(false)}},"Cancel"))
+):React.createElement("button",{className:"btn btn-dk",style:{marginTop:".6rem"},onClick:function(){setAddMarketOpen(true)}},"\u002b Add Market")
+))
+
+,
+
+// ── AUTOMATION MODE ──────────────────────────────────────────────
+React.createElement("div",{className:"acc gn",style:{marginTop:"1rem"}},
+React.createElement("div",{className:"acc-h gb",onClick:function(){setAutoSettingsOpen(function(o){return!o})}},
+React.createElement("div",{className:"acc-l"},
+React.createElement("span",null,autoSettings.auto_mode?"\ud83e\udd16":"\u23f8\ufe0f"),
+React.createElement("div",null,
+React.createElement("div",{className:"acc-t g"},"Automation Mode"),
+React.createElement("div",{className:"acc-s g"},autoSettings.auto_mode?"Auto-research is ON \u2014 runs every "+autoSettings.frequency_hours+"h":"Auto-research is OFF \u2014 runs on demand only"))),
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:".5rem",marginLeft:"auto"}},
+React.createElement("span",{style:{fontSize:".72rem",color:autoSettings.auto_mode?"var(--gold)":"var(--mut)"}},autoSettings.auto_mode?"ON":"OFF"),
+React.createElement("div",{
+onClick:function(e){e.stopPropagation();saveAutoSettings({auto_mode:!autoSettings.auto_mode})},
+style:{width:36,height:20,borderRadius:10,background:autoSettings.auto_mode?"var(--gold)":"rgba(255,255,255,.15)",cursor:"pointer",position:"relative",transition:"background .2s"}
+},React.createElement("div",{style:{position:"absolute",top:3,left:autoSettings.auto_mode?18:3,width:14,height:14,borderRadius:"50%",background:"#fff",transition:"left .2s"}})))),
+autoSettingsOpen&&React.createElement("div",{className:"acc-b gb"},
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:".7rem",marginBottom:"1rem"}},
+React.createElement("div",null,React.createElement("label",{style:{fontSize:".72rem",color:"var(--mut)",display:"block",marginBottom:".3rem"}},"Research Frequency"),
+React.createElement("select",{className:"inp",value:autoSettings.frequency_hours,onChange:function(e){saveAutoSettings({frequency_hours:Number(e.target.value)})}},
+[{v:6,l:"Every 6 hours"},{v:12,l:"Every 12 hours"},{v:24,l:"Daily"},{v:48,l:"Every 2 days"},{v:168,l:"Weekly"}].map(function(o){return React.createElement("option",{key:o.v,value:o.v},o.l)}))),
+React.createElement("div",null,React.createElement("label",{style:{fontSize:".72rem",color:"var(--mut)",display:"block",marginBottom:".3rem"}},"Follow-Up Flag (days)"),
+React.createElement("input",{className:"inp",type:"number",min:1,max:30,value:autoSettings.auto_followup_days,onChange:function(e){saveAutoSettings({auto_followup_days:Number(e.target.value)})}})),
+React.createElement("div",null,React.createElement("label",{style:{fontSize:".72rem",color:"var(--mut)",display:"block",marginBottom:".3rem"}},"Dead Lead After (days)"),
+React.createElement("input",{className:"inp",type:"number",min:7,max:90,value:autoSettings.auto_dead_days,onChange:function(e){saveAutoSettings({auto_dead_days:Number(e.target.value)})}})),
+React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:".4rem"}},
+React.createElement("label",{style:{fontSize:".72rem",color:"var(--mut)"}},"Auto Options"),
+React.createElement("label",{style:{display:"flex",alignItems:"center",gap:".5rem",fontSize:".8rem",cursor:"pointer"}},
+React.createElement("input",{type:"checkbox",checked:autoSettings.auto_buyers!==false,onChange:function(e){saveAutoSettings({auto_buyers:e.target.checked})}}),
+"Auto-discover buyers"),
+React.createElement("label",{style:{display:"flex",alignItems:"center",gap:".5rem",fontSize:".8rem",cursor:"pointer"}},
+React.createElement("input",{type:"checkbox",checked:autoSettings.auto_stage!==false,onChange:function(e){saveAutoSettings({auto_stage:e.target.checked})}}),
+"Auto-stage stale leads"))),
+autoResult&&React.createElement("div",{style:{fontSize:".78rem",color:"var(--gold)",marginBottom:".7rem",padding:".5rem",background:"rgba(201,168,76,.1)",borderRadius:6}},
+"\u2713 Last run: "+autoResult.newLeads+" new leads, "+autoResult.newBuyers+" buyers added"+(autoResult.staged?", "+autoResult.staged+" leads staged":"")),
+React.createElement("div",{style:{display:"flex",gap:".5rem",flexWrap:"wrap"}},
+React.createElement("button",{className:"btn btn-dk",disabled:autoRunning||markets.length===0,onClick:function(){runAutoResearch(false)}},autoRunning?"\u23f3 Running…":"\u25b6 Run Now"),
+markets.length===0&&React.createElement("span",{style:{fontSize:".75rem",color:"var(--mut)",alignSelf:"center"}},"Add markets above first")),
+markets.length===0&&React.createElement("div",{style:{marginTop:".5rem",fontSize:".75rem",color:"var(--mut)"}},"Tip: Add at least one target market above to use automation.")
+)),
 
 // Tab 7: SCRIPTS LIBRARY (uses App-level scrOpen/scrSearch state)
 tab===7&&React.createElement("div",{className:"pg"},
@@ -991,6 +1268,39 @@ React.createElement("span",{style:{fontFamily:"var(--sm)",fontSize:".44rem",colo
 )))})(),
 
 // KANBAN MODAL
-modal&&modal.t==="kan"&&(function(){var l=modal.l,stage=gs(l.id);return React.createElement("div",{className:"mbg",onClick:function(e){if(e.target===e.currentTarget)setModal(null)}},React.createElement("div",{className:"modal"},React.createElement("div",{className:"mhd"+(l.distressed?" rs":"")},React.createElement("div",{className:"mhd-t"},l.name),React.createElement("button",{className:"mcl",onClick:function(){setModal(null)}},"\u2715")),React.createElement("div",{className:"mbd"},l.propertyAddress&&React.createElement("div",{style:{background:"#f0f4ff",border:"1px solid #c0cce8",borderRadius:4,padding:".5rem .75rem",marginBottom:".9rem",fontSize:".8rem"}},React.createElement("strong",null,l.propertyAddress)),React.createElement("div",{className:"slbl"},"Stage"),React.createElement("div",{style:{display:"flex",gap:".35rem",flexWrap:"wrap",marginBottom:"1rem"}},STAGES.map(function(s){return React.createElement("button",{key:s,className:"btn btn-xs"+(s===stage?" btn-gd":" btn-ot"),onClick:function(){ss(l.id,s);setModal(null)}},s)})),React.createElement("hr",{className:"divider"}),React.createElement("div",{className:"g2"},[["Score",aScore(l,stage)+" ("+heatLabel(aScore(l,stage))+")"],["Source",l.leadSource||"N/A"],["\ud83d\udcf1",l.phone],["\u2709\ufe0f",l.email],["\ud83c\udfe1",l.property],["\u23f1",l.timeline],["\ud83d\udcbc",fmt(l.deal?.fee)+" fee"]].map(function(r){return React.createElement("div",{key:r[1],style:{fontSize:".8rem",display:"flex",gap:".4rem"}},React.createElement("span",null,r[0]),React.createElement("span",null,r[1]))})),React.createElement("div",{style:{marginTop:".9rem",display:"flex",gap:".45rem",flexWrap:"wrap"}},React.createElement("button",{className:"btn btn-dk btn-sm",onClick:function(){setModal({t:"sc",l:l})}},"\ud83d\udcdd Script"),l.phone&&React.createElement("a",{href:"tel:"+l.phone,className:"btn btn-gn btn-sm",style:{textDecoration:"none"},onClick:function(){logC(l.id)}},"\ud83d\udcde Call"),React.createElement("button",{className:"btn btn-bl btn-sm",onClick:function(){dealBlast(l)}},"\ud83d\udce2 Blast")))))})()
+modal&&modal.t==="kan"&&(function(){var l=modal.l,stage=gs(l.id);return React.createElement("div",{className:"mbg",onClick:function(e){if(e.target===e.currentTarget)setModal(null)}},React.createElement("div",{className:"modal"},React.createElement("div",{className:"mhd"+(l.distressed?" rs":"")},React.createElement("div",{className:"mhd-t"},l.name),React.createElement("button",{className:"mcl",onClick:function(){setModal(null)}},"\u2715")),React.createElement("div",{className:"mbd"},l.propertyAddress&&React.createElement("div",{style:{background:"#f0f4ff",border:"1px solid #c0cce8",borderRadius:4,padding:".5rem .75rem",marginBottom:".9rem",fontSize:".8rem"}},React.createElement("strong",null,l.propertyAddress)),React.createElement("div",{className:"slbl"},"Stage"),React.createElement("div",{style:{display:"flex",gap:".35rem",flexWrap:"wrap",marginBottom:"1rem"}},STAGES.map(function(s){return React.createElement("button",{key:s,className:"btn btn-xs"+(s===stage?" btn-gd":" btn-ot"),onClick:function(){ss(l.id,s);setModal(null)}},s)})),React.createElement("hr",{className:"divider"}),React.createElement("div",{className:"g2"},[["Score",aScore(l,stage)+" ("+heatLabel(aScore(l,stage))+")"],["Source",l.leadSource||"N/A"],["\ud83d\udcf1",l.phone],["\u2709\ufe0f",l.email],["\ud83c\udfe1",l.property],["\u23f1",l.timeline],["\ud83d\udcbc",fmt(l.deal?.fee)+" fee"]].map(function(r){return React.createElement("div",{key:r[1],style:{fontSize:".8rem",display:"flex",gap:".4rem"}},React.createElement("span",null,r[0]),React.createElement("span",null,r[1]))})),React.createElement("div",{style:{marginTop:".9rem",display:"flex",gap:".45rem",flexWrap:"wrap"}},React.createElement("button",{className:"btn btn-dk btn-sm",onClick:function(){setModal({t:"sc",l:l})}},"\ud83d\udcdd Script"),l.phone&&React.createElement("a",{href:"tel:"+l.phone,className:"btn btn-gn btn-sm",style:{textDecoration:"none"},onClick:function(){logC(l.id)}},"\ud83d\udcde Call"),React.createElement("button",{className:"btn btn-bl btn-sm",onClick:function(){dealBlast(l)}},"\ud83d\udce2 Blast")))))})(),
+
+// ── LEGAL MODAL ──────────────────────────────────────────────────
+legalOpen&&React.createElement("div",{className:"mbg",onClick:function(e){if(e.target===e.currentTarget){setLegalOpen(false);setLegalStateDetail(null)}}},
+React.createElement("div",{className:"modal",style:{maxWidth:640,maxHeight:"85vh",overflowY:"auto"}},
+React.createElement("div",{className:"mhd"},
+React.createElement("div",{className:"mhd-t"},"\u2696\ufe0f Wholesale Real Estate \u2014 Legal Reference"),
+React.createElement("button",{className:"mcl",onClick:function(){setLegalOpen(false);setLegalStateDetail(null)}},"\u2715")),
+React.createElement("div",{className:"mbd"},
+React.createElement("div",{style:{background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.3)",borderRadius:8,padding:"1rem",marginBottom:"1.2rem",fontSize:".78rem",lineHeight:1.7}},
+React.createElement("div",{style:{fontWeight:700,marginBottom:".4rem",color:"var(--gold)"}},"⚠️ Important Legal Disclaimer"),
+"LeadForge PRO provides this information for general educational purposes only. It does NOT constitute legal advice. Wholesale real estate laws change frequently and vary by state, county, and municipality. ",
+React.createElement("strong",null,"You are solely responsible for ensuring your activities comply with all applicable laws."),
+" Always consult a licensed real estate attorney in the relevant state before conducting any wholesale transaction."),
+legalStateDetail&&STATE_LEGAL[legalStateDetail]&&React.createElement("div",{style:{marginBottom:"1.2rem"}},
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:".6rem",marginBottom:".7rem"}},
+React.createElement("span",{style:{fontSize:"1.4rem"}},(STATE_LEGAL[legalStateDetail].level==="danger"?"\ud83d\udd34":STATE_LEGAL[legalStateDetail].level==="warn"?"\ud83d\udfe1":"\ud83d\udfe2")),
+React.createElement("div",null,
+React.createElement("div",{style:{fontWeight:700,fontSize:"1rem"}},(US_STATES.find(function(s){return s.c===legalStateDetail})||{n:legalStateDetail}).n),
+React.createElement("div",{style:{fontSize:".78rem",color:STATE_LEGAL[legalStateDetail].level==="danger"?"#ff8080":STATE_LEGAL[legalStateDetail].level==="warn"?"var(--gold)":"#80e080"}},STATE_LEGAL[legalStateDetail].summary))),
+React.createElement("div",{style:{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:6,padding:"1rem",fontSize:".8rem",lineHeight:1.85,marginBottom:".7rem"}},STATE_LEGAL[legalStateDetail].detail),
+React.createElement("div",{style:{background:STATE_LEGAL[legalStateDetail].level==="danger"?"rgba(220,50,50,.1)":"rgba(255,255,255,.04)",border:"1px solid "+(STATE_LEGAL[legalStateDetail].level==="danger"?"rgba(220,50,50,.3)":"rgba(255,255,255,.1)"),borderRadius:6,padding:".7rem 1rem",fontSize:".8rem",lineHeight:1.65}},
+React.createElement("strong",null,"\u2705 Recommended Action: "),STATE_LEGAL[legalStateDetail].action),
+React.createElement("button",{className:"btn btn-dk btn-sm",style:{marginTop:".8rem"},onClick:function(){setLegalStateDetail(null)}},"\u2190 All States")),
+!legalStateDetail&&React.createElement("div",null,
+React.createElement("div",{style:{fontFamily:"var(--sm)",fontSize:".5rem",letterSpacing:".16em",color:"var(--mut)",textTransform:"uppercase",marginBottom:".8rem"}},"All 50 States \u2014 Click any state for details"),
+React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:".3rem",marginBottom:"1rem"}},
+US_STATES.map(function(s){var info=STATE_LEGAL[s.c];var col=!info||info.level==="ok"?"rgba(80,200,80,.12)":info.level==="warn"?"rgba(220,160,50,.15)":"rgba(220,50,50,.15)";var border=!info||info.level==="ok"?"rgba(80,200,80,.25)":info.level==="warn"?"rgba(220,160,50,.3)":"rgba(220,50,50,.3)";return React.createElement("button",{key:s.c,onClick:function(){setLegalStateDetail(s.c)},style:{padding:".25rem .5rem",background:col,border:"1px solid "+border,borderRadius:4,cursor:"pointer",fontSize:".72rem",color:"var(--fg)",transition:"opacity .15s"},title:(info?info.summary:"Generally Permitted")},(info&&info.level==="danger"?"\ud83d\udd34":info&&info.level==="warn"?"\ud83d\udfe1":"\ud83d\udfe2")+" "+s.c)})),
+React.createElement("div",{style:{display:"flex",gap:"1.2rem",fontSize:".72rem",color:"var(--mut)",marginBottom:".6rem",flexWrap:"wrap"}},
+React.createElement("span",null,"\ud83d\udd34 License Required \u2014 3 states (IL, OK, SC)"),
+React.createElement("span",null,"\ud83d\udfe1 Caution / Regulated \u2014 9 states"),
+React.createElement("span",null,"\ud83d\udfe2 Generally Permitted \u2014 38 states")),
+React.createElement("div",{style:{fontSize:".73rem",color:"var(--mut)",lineHeight:1.7,padding:".6rem",background:"rgba(255,255,255,.03)",borderRadius:6}},"Click any state for detailed information, recommended actions, and market notes. Laws change — always verify current requirements with a local real estate attorney before transacting."))
+)))
 
 );}
