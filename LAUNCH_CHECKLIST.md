@@ -42,6 +42,7 @@ Run these files in Supabase SQL Editor, in order:
 1. [migrations/001_create_profiles.sql](migrations/001_create_profiles.sql)
 2. [migrations/002_enable_rls_and_user_progress.sql](migrations/002_enable_rls_and_user_progress.sql)
 3. [migrations/003_auto_create_profiles_on_signup.sql](migrations/003_auto_create_profiles_on_signup.sql)
+4. [migrations/005_create_leads_buyers_deals.sql](migrations/005_create_leads_buyers_deals.sql)
 
 This creates:
 

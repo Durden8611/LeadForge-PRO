@@ -32,11 +32,13 @@ Run the SQL migrations in the `migrations/` folder in order:
 1. `001_create_profiles.sql`
 2. `002_enable_rls_and_user_progress.sql`
 3. `003_auto_create_profiles_on_signup.sql`
+4. `004_add_analytics_and_profile_metadata.sql`
 
 These create:
 
 - `profiles` for account metadata and admin flags
 - `user_progress` for saved pipeline state, follow-ups, scripts, and CRM progress per user
+- `user_activity` for authenticated app events like sign-ins and page views
 - row-level security so each signed-in user can access only their own records unless marked admin
 
 If you want the raw starter SQL, the core `profiles` table looks like this:
@@ -54,6 +56,7 @@ create table profiles (
 Notes:
 - The database now auto-creates missing profile rows for new auth users via a trigger.
 - The app also attempts a fallback profile upsert on callback, sign-in, and app load.
+- `profiles` now stores `email` and `last_seen_at` so admin reporting can show who is active.
 - Without these migrations, account creation can still work, but admin features and saved user progress will be incomplete.
 
 If your Supabase project already has auth users but the `profiles` table is empty or malformed, run [supabase/repair_profiles_and_auth.sql](supabase/repair_profiles_and_auth.sql). It safely creates any missing tables, restores policies and triggers, normalizes malformed legacy `profiles` columns into `username` / `full_name`, and backfills missing `profiles` rows from `auth.users`.
@@ -140,8 +143,19 @@ This project is a standard Next.js app and deploys well to Vercel.
   - sign in
   - generate leads from the Leads tab
   - open AI Negotiation Assistant / Sales Coach if `ANTHROPIC_API_KEY` is configured
-9. See [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) for the exact production launch sequence and current integration status.
-10. Use [VERCEL_ENV_PRODUCTION.txt](VERCEL_ENV_PRODUCTION.txt) as the paste-ready source for your Vercel Production environment variables.
+9. In the Vercel dashboard, open the project and enable Web Analytics so visitor and page-view counts for `leadforge-pro.com` start collecting.
+10. In the app admin UI at `/admin`, confirm you can see profile emails, recent activity, and sign-in/page-view counts after logging in.
+11. See [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) for the exact production launch sequence and current integration status.
+12. Use [VERCEL_ENV_PRODUCTION.txt](VERCEL_ENV_PRODUCTION.txt) as the paste-ready source for your Vercel Production environment variables.
+
+## Analytics
+
+LeadForge PRO now uses two layers of tracking:
+
+- Vercel Web Analytics for anonymous visitor and page-view counts on the public site
+- Supabase `user_activity` records for authenticated in-app events like sign-ins, sign-outs, and page views
+
+This split gives you reliable traffic reporting for `leadforge-pro.com` without having to build your own visitor counter, while still letting you inspect identifiable product usage in Supabase and the admin screen.
 
 Quick deploy with the Vercel CLI:
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import LeadForgePro from '../components/LeadForgePro'
+import { trackUserActivity } from '../lib/activityTracker'
 import { createClient } from '../lib/supabase'
 import { ensureProfile } from '../lib/ensureProfile'
 
@@ -41,6 +42,15 @@ export default function AppPage() {
 
   async function handleSignOut() {
     const supabase = createClient()
+
+    if (user?.id) {
+      await trackUserActivity(supabase, {
+        userId: user.id,
+        eventType: 'sign_out',
+        path: '/app',
+      })
+    }
+
     await supabase.auth.signOut()
     router.replace('/login')
   }

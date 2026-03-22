@@ -6,8 +6,9 @@ import { createClient } from '../lib/supabase'
 export default function AdminPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState(null)
   const [profiles, setProfiles] = useState([])
+  const [activity, setActivity] = useState([])
+  const [summary, setSummary] = useState({ totalUsers: 0, pageViews: 0, signIns: 0 })
   const [msg, setMsg] = useState(null)
   const [query, setQuery] = useState('')
 
@@ -15,7 +16,6 @@ export default function AdminPage() {
     const supabase = createClient()
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return router.replace('/login')
-      setUser(session.user)
       // Access is controlled by the server-side-backed profile admin flag.
       supabase.from('profiles').select('is_admin').eq('id', session.user.id).single()
         .then(({ data, error }) => {
@@ -24,21 +24,53 @@ export default function AdminPage() {
             router.replace('/app')
             return
           }
-          // load profiles
-          loadProfiles(supabase)
+
+          Promise.all([loadProfiles(supabase), loadActivity(supabase)])
         })
         .catch(() => { router.replace('/app') })
     })
   }, [])
 
-  function loadProfiles(supabase) {
-    setLoading(true); setMsg(null)
-    supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(500)
-      .then(({ data, error }) => {
-        if (error) return setMsg({ type: 'error', text: error.message })
-        setProfiles(data || [])
-      })
-      .finally(() => setLoading(false))
+  async function loadProfiles(supabase) {
+    setLoading(true)
+    setMsg(null)
+
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(500)
+
+    if (error) {
+      setMsg({ type: 'error', text: error.message })
+      setLoading(false)
+      return
+    }
+
+    setProfiles(data || [])
+    setLoading(false)
+  }
+
+  async function loadActivity(supabase) {
+    const [
+      usersResult,
+      pageViewsResult,
+      signInsResult,
+      activityResult,
+    ] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('user_activity').select('*', { count: 'exact', head: true }).eq('event_type', 'page_view'),
+      supabase.from('user_activity').select('*', { count: 'exact', head: true }).eq('event_type', 'sign_in'),
+      supabase.from('user_activity').select('id, user_id, event_type, path, created_at').order('created_at', { ascending: false }).limit(50),
+    ])
+
+    if (activityResult.error) {
+      setMsg({ type: 'error', text: activityResult.error.message })
+      return
+    }
+
+    setSummary({
+      totalUsers: usersResult.count || 0,
+      pageViews: pageViewsResult.count || 0,
+      signIns: signInsResult.count || 0,
+    })
+    setActivity(activityResult.data || [])
   }
 
   async function handleSave(p) {
@@ -66,6 +98,11 @@ export default function AdminPage() {
     return JSON.stringify(p).toLowerCase().includes(q)
   })
 
+  function getUserLabel(userId) {
+    const profile = profiles.find((item) => item.id === userId)
+    return profile?.email || profile?.full_name || userId
+  }
+
   return (
     <>
       <Head>
@@ -73,6 +110,30 @@ export default function AdminPage() {
       </Head>
       <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
         <h2>Admin — Manage Profiles</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <SummaryCard label="Tracked users" value={summary.totalUsers} />
+          <SummaryCard label="App page views" value={summary.pageViews} />
+          <SummaryCard label="Sign-ins" value={summary.signIns} />
+        </div>
+
+        <div style={{ marginBottom: 20, padding: 12, border: '1px solid #ddd', borderRadius: 6 }}>
+          <h3 style={{ marginTop: 0 }}>Recent user activity</h3>
+          {activity.length === 0 && <div style={{ color: '#666', fontSize: 14 }}>No tracked activity yet. Run migration 004 and sign in to start collecting it.</div>}
+          {activity.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {activity.map((item) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, borderBottom: '1px solid #eee', paddingBottom: 8 }}>
+                  <div>
+                    <strong>{item.event_type}</strong> by {getUserLabel(item.user_id)}
+                    {item.path ? <span> on {item.path}</span> : null}
+                  </div>
+                  <div style={{ color: '#666', whiteSpace: 'nowrap' }}>{new Date(item.created_at).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{ marginBottom: 12 }}>
           <input placeholder="Search profile row JSON or id" value={query} onChange={e=>setQuery(e.target.value)} style={{ padding:8, width:320 }} />
           <button onClick={() => { setQuery('') }} style={{ marginLeft:8 }}>Clear</button>
@@ -89,6 +150,15 @@ export default function AdminPage() {
         )}
       </div>
     </>
+  )
+}
+
+function SummaryCard({ label, value }) {
+  return (
+    <div style={{ padding: 12, border: '1px solid #ddd', borderRadius: 6, background: '#fafafa' }}>
+      <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
+    </div>
   )
 }
 

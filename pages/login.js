@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { trackUserActivity } from '../lib/activityTracker'
 import { createClient } from '../lib/supabase'
 import { ensureProfile } from '../lib/ensureProfile'
 
@@ -144,6 +145,11 @@ export default function LoginPage() {
     }
 
     await ensureProfile(supabase, data.user)
+    await trackUserActivity(supabase, {
+      userId: data.user.id,
+      eventType: 'sign_in',
+      path: '/login',
+    })
     router.replace('/app')
   }
 

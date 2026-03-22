@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/router'
+import { trackUserActivity } from '../../lib/activityTracker'
 import { createClient } from '../../lib/supabase'
 import { ensureProfile } from '../../lib/ensureProfile'
 
@@ -41,6 +42,11 @@ export default function AuthCallback() {
       }
 
       await ensureProfile(supabase, session.user)
+      await trackUserActivity(supabase, {
+        userId: session.user.id,
+        eventType: 'sign_in',
+        path: '/auth/callback',
+      })
 
       const authType = hashParams.get('type') || url.searchParams.get('type')
 

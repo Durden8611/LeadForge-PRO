@@ -25,12 +25,8 @@ const MOTIV_TAGS=[{k:"foreclosure",l:"Foreclosure",c:"fc"},{k:"probate",l:"Proba
 // REHAB CATEGORIES per blueprint
 const REHAB_CATS=[{k:"roof",l:"Roof",i:"\ud83c\udfe0",max:15000,def:0},{k:"kitchen",l:"Kitchen",i:"\ud83c\udf73",max:20000,def:0},{k:"bath",l:"Bathrooms",i:"\ud83d\udebf",max:12000,def:0},{k:"flooring",l:"Flooring",i:"\ud83e\uddf1",max:8000,def:0},{k:"paint",l:"Paint/Ext",i:"\ud83c\udfa8",max:6000,def:0},{k:"hvac",l:"HVAC",i:"\u2744\ufe0f",max:10000,def:0},{k:"plumbing",l:"Plumbing",i:"\ud83d\udeb0",max:8000,def:0},{k:"electric",l:"Electrical",i:"\u26a1",max:8000,def:0},{k:"foundation",l:"Foundation",i:"\ud83e\uddf1",max:12000,def:0},{k:"misc",l:"Misc / Other",i:"\ud83d\udee0\ufe0f",max:10000,def:0}];
 
-const SBUYERS=[
-{id:"B1",name:"Marcus Reeves",type:"Fix & Flip",phone:"(813) 555-0192",email:"marcus@gmail.com",pr:[80000,250000],criteria:["SFR","needs work","ARV 70%","close 14d"],deals:47,locations:["Tampa","St Pete","Clearwater"],rehabTol:"Heavy",financing:"Cash"},
-{id:"B2",name:"Sunrise Capital LLC",type:"Buy & Hold",phone:"(941) 555-0341",email:"acq@sunrisecap.com",pr:[100000,400000],criteria:["SFR/duplex","cash flow ok","tenant ok","portfolio"],deals:112,locations:["Sarasota","Bradenton","Venice"],rehabTol:"Light",financing:"Cash/Hard Money"},
-{id:"B3",name:"Angela Frost REI",type:"Fix & Flip",phone:"(305) 555-0874",email:"angela.rei@gmail.com",pr:[150000,350000],criteria:["3BD+ SFR","good bones","motivated","as-is"],deals:23,locations:["Miami","Fort Lauderdale"],rehabTol:"Medium",financing:"Cash"},
-{id:"B4",name:"Blue Ridge Acq.",type:"Turnkey",phone:"(407) 555-0213",email:"deals@blueridge.com",pr:[120000,500000],criteria:["already rented","8%+ CF","no major repairs"],deals:89,locations:["Orlando","Kissimmee","Daytona"],rehabTol:"None/Light",financing:"Conventional/Cash"}
-];
+// Buyers are loaded from API (database) — no hardcoded sample data
+const SBUYERS_FALLBACK=[];
 
 const SN={FL:["Palm Ave","Mangrove Ln","Citrus Blvd","Pelican Dr","Sunset Blvd","Gulf Shore Dr","Flamingo Way","Osprey Ct","Manatee Rd","Sawgrass Ln","Cypress Cir","Magnolia St"],TX:["Lone Star Blvd","Bluebonnet Dr","Pecan St","Mesquite Ln","Longhorn Ave","Timber Creek Rd"],CA:["Pacific Ave","Redwood Dr","Golden Gate Blvd","Sunset Ln","Canyon Rd","Eucalyptus St"],NY:["Broadway Ave","Hudson St","Fifth Ave","Riverside Dr","Lexington Blvd"],GA:["Peach Tree Ln","Magnolia Ave","Dogwood Dr"],AZ:["Saguaro Dr","Desert Rose Ln","Palo Verde Blvd"],NC:["Blue Ridge Pkwy","Dogwood Ln","Tobacco Rd"],OH:["Buckeye Ln","Scioto Blvd","Lake Erie Dr"],D:["Oak St","Maple Ave","Cedar Ln","Elm Blvd","Pine Ct","Walnut Dr","Birch Way","Ash Rd","Hickory Blvd","Sycamore Ln"]};
 
@@ -115,24 +111,9 @@ return "========================================\n        WHOLESALE DEAL SHEET\n
 }
 
 
-// ====== COMP ANALYSIS GENERATOR ======
-function genComps(l){
-var arv=l.arv||200000,seed=parseInt(l.id.replace(/[^0-9]/g,""))||42;
-var comps=[];
-var streets=["Oak","Pine","Maple","Cedar","Elm","Birch","Walnut","Cherry"];
-for(var i=0;i<5;i++){
-var adj=0.85+(((seed*31+i*17)%30)/100);
-var sp=Math.round(arv*adj);
-var sqft=l.propData?l.propData.sqft+(-200+((seed*13+i*41)%400)):1600+((seed*7+i*23)%800);
-var daysAgo=7+((seed*3+i*19)%83);
-var dt=new Date(Date.now()-daysAgo*86400000);
-comps.push({addr:(100+((seed*7+i*137)%9800))+" "+streets[i%streets.length]+" St, "+l.propertyCity+", "+l.propertyState,price:sp,sqft:sqft,ppsf:Math.round(sp/sqft),date:dt.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),daysAgo:daysAgo,beds:l.propData?l.propData.bedBath:["3/2","4/2","2/1"][i%3]})
-}
-comps.sort(function(a,b){return a.daysAgo-b.daysAgo});
-var avgP=Math.round(comps.reduce(function(a,c){return a+c.price},0)/comps.length);
-var spread=comps.reduce(function(a,c){return Math.max(a,Math.abs(c.price-avgP))},0);
-var confScore=Math.max(55,Math.min(95,Math.round(92-spread/avgP*200)));
-return{comps:comps,arvEst:avgP,confidence:confScore,spread:spread}}
+// ====== REAL COMP ANALYSIS via RentCast API ======
+// genComps returns a placeholder; real comps loaded asynchronously via fetchRealComps()
+function genComps(l){return{comps:[],arvEst:l.arv||0,confidence:0,spread:0,loading:true}}
 
 // ====== DEAL MARKETING PAGE HTML GENERATOR ======
 function genMarketingPage(l,loc){ var d=l.deal||{};var pd=l.propData||{}; return '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Wholesale Deal - '+l.propertyStreet+'</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#f5f0e8;color:#0d0d0d}.hero{background:linear-gradient(135deg,#0d0d0d,#1a2a3a);padding:2.5rem 1.5rem;color:#f5f0e8;text-align:center}.hero h1{font-size:1.8rem;margin-bottom:.3rem}.hero .price{font-size:2.5rem;font-weight:900;color:#c9a84c;margin:.5rem 0}.hero .sub{font-size:.9rem;opacity:.7}.container{max-width:700px;margin:0 auto;padding:1.5rem}.card{background:#fff;border:1px solid #d4c9b0;border-radius:8px;padding:1.5rem;margin-bottom:1rem;box-shadow:0 2px 14px rgba(0,0,0,.05)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:.8rem 0}.stat{text-align:center;padding:.8rem;background:#faf7f0;border-radius:6px}.stat-n{font-size:1.5rem;font-weight:900;color:#c9a84c}.stat-l{font-size:.7rem;color:#8a7f6e;text-transform:uppercase;letter-spacing:.1em;margin-top:.2rem}.cta{display:block;width:100%;padding:1rem;background:#3a8a2e;color:#fff;border:none;border-radius:6px;font-size:1.1rem;font-weight:700;cursor:pointer;text-align:center;margin-top:1rem;text-decoration:none}.label{font-size:.65rem;color:#8a7f6e;text-transform:uppercase;letter-spacing:.15em;margin-bottom:.3rem}.val{font-size:.95rem;font-weight:600;margin-bottom:.6rem} /* SALES COACH */ .coach-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.9rem;margin-bottom:1.2rem} .coach-card{background:#fff;border:1.5px solid var(--bdr);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .2s}.coach-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.1);border-color:var(--gold)} .coach-card-h{padding:.8rem 1rem;color:#f5f0e8;display:flex;align-items:center;gap:.6rem} .coach-card-h.call{background:linear-gradient(135deg,#1a3a6a,#2a5a9a)}.coach-card-h.text{background:linear-gradient(135deg,#2a6a20,#4a9a3e)}.coach-card-h.email{background:linear-gradient(135deg,#6a3a1a,#9a5a2a)}.coach-card-h.objection{background:linear-gradient(135deg,#5a1a3a,#8a2a5a)} .coach-card-ico{font-size:1.6rem}.coach-card-t{font-family:var(--sf);font-size:1rem;font-weight:700} .coach-card-bd{padding:.8rem 1rem}.coach-card-desc{font-size:.78rem;color:var(--mut);line-height:1.55;margin-bottom:.5rem} .coach-diff{font-family:var(--sm);font-size:.44rem;letter-spacing:.08em;text-transform:uppercase;padding:.15rem .4rem;border-radius:3px;display:inline-block} .coach-diff.easy{background:#e8f5e4;color:#2a6a20;border:1px solid #a8d4a0}.coach-diff.med{background:#fff3e0;color:#8a5a00;border:1px solid #e8c880}.coach-diff.hard{background:#fde8e8;color:#8a1a1a;border:1px solid #e8a0a0} .coach-chat{display:flex;flex-direction:column;gap:.5rem;min-height:200px;max-height:400px;overflow-y:auto;padding:.5rem;margin-bottom:.5rem;border:1px solid var(--bdr);border-radius:var(--r);background:var(--inp)} .coach-msg{padding:.55rem .75rem;border-radius:8px;font-size:.82rem;line-height:1.6;max-width:85%} .coach-msg.user{background:#dde8f8;border:1px solid #a0b8e0;align-self:flex-end;color:#1a2a4a} .coach-msg.seller{background:#fff;border:1px solid var(--bdr);align-self:flex-start;color:var(--fg)} .coach-msg.system{background:#f5f0ff;border:1px solid #c8b8e8;align-self:center;text-align:center;color:#4a2a6a;font-size:.76rem;max-width:95%} .coach-sender{font-family:var(--sm);font-size:.42rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.2rem} .coach-sender.u{color:#1a3a6a}.coach-sender.s{color:var(--rust)} .coach-score-card{background:linear-gradient(135deg,var(--fg),#1a2a3a);border-radius:var(--r);padding:1.3rem;color:#f5f0e8;margin-top:.8rem} .coach-score-n{font-family:var(--sf);font-size:2.5rem;font-weight:900;color:var(--gold);text-align:center;margin-bottom:.3rem} .coach-score-l{font-family:var(--sm);font-size:.5rem;letter-spacing:.16em;text-transform:uppercase;text-align:center;color:var(--gold);margin-bottom:.8rem} .coach-fb{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:.7rem .85rem;margin-bottom:.5rem;font-size:.8rem;line-height:1.6} .coach-fb:last-child{margin-bottom:0} .coach-fb-t{font-family:var(--sm);font-size:.44rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.3rem} .coach-fb-t.good{color:#80e0a0}.coach-fb-t.improve{color:#e8a060}.coach-fb-t.tip{color:#a0c0f0} </style></head><body><div class="hero"><h1>Investment Opportunity</h1><div class="sub">'+l.propertyAddress+'</div><div class="price">'+fmt(d.offer||0)+' Assignment</div><div class="sub">ARV: '+fmt(l.arv)+' | Fee: '+fmt(d.fee)+'</div></div><div class="container"><div class="card"><h2 style="margin-bottom:.8rem">Deal Numbers</h2><div class="grid"><div class="stat"><div class="stat-n">'+fmt(l.arv)+'</div><div class="stat-l">After Repair Value</div></div><div class="stat"><div class="stat-n">'+fmt(d.offer)+'</div><div class="stat-l">Offer / Assignment</div></div><div class="stat"><div class="stat-n">'+fmt(l.repairCost)+'</div><div class="stat-l">Est. Repairs</div></div><div class="stat"><div class="stat-n">'+fmt(d.equity)+'</div><div class="stat-l">Buyer Equity</div></div></div></div><div class="card"><h2 style="margin-bottom:.8rem">Property Details</h2><div class="label">Type</div><div class="val">'+(pd.propType||"SFR")+' | '+(pd.bedBath||"3/2")+'</div><div class="label">Size</div><div class="val">'+(pd.sqft?pd.sqft.toLocaleString():"N/A")+' sqft | Built '+(pd.yearBuilt||"N/A")+'</div><div class="label">Lot</div><div class="val">'+(pd.lotSize||"N/A")+'</div><div class="label">Assessed Value</div><div class="val">'+fmt(pd.assessed)+'</div><div class="label">Est. Equity</div><div class="val">'+fmt(pd.equityEst)+'</div></div><div class="card"><h2 style="margin-bottom:.8rem">Seller Timeline</h2><div class="val">'+l.timeline+'</div><div class="label">Notes</div><div class="val" style="font-weight:400">'+(l.userNotes||l.notes)+'</div></div><a href="mailto:?subject=Offer on '+encodeURIComponent(l.propertyStreet)+'&body=I am interested in this deal. Please send me the details." class="cta">Submit Offer / Contact Wholesaler</a><p style="text-align:center;margin-top:1rem;font-size:.75rem;color:#8a7f6e">Generated by LeadForge PRO | '+loc+'</p></div></body></html>'}
@@ -274,17 +255,82 @@ const[coachLoading,setCoachLoading]=useState(false);
 const[coachScore,setCoachScore]=useState(null);
 const[coachExCount,setCoachExCount]=useState(0);
 const[progressLoaded,setProgressLoaded]=useState(false);
+const[dbBuyers,setDbBuyers]=useState([]);
+const[buyersLoaded,setBuyersLoaded]=useState(false);
+const[addBuyerOpen,setAddBuyerOpen]=useState(false);
+const[newBuyer,setNewBuyer]=useState({name:"",company:"",buyer_type:"Fix & Flip",phone:"",email:"",price_min:"",price_max:"",criteria:"",locations:"",rehab_tolerance:"Medium",financing:"Cash",notes:""});
 const supabase=useMemo(function(){return createClient()},[]);
 
-async function authedJson(endpoint,payload){
+async function authedJson(endpoint,payload,method){
 var sessionResult=await supabase.auth.getSession();
 var session=sessionResult?.data?.session;
 if(!session?.access_token)throw new Error("Please sign in again.");
-var resp=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(payload)});
+var opts={method:method||"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token}};
+if(payload!==undefined)opts.body=JSON.stringify(payload);
+var resp=await fetch(endpoint,opts);
 var data={};
 try{data=await resp.json()}catch{}
 if(!resp.ok)throw new Error(data?.error||"Request failed");
 return data;
+}
+
+// Load buyers from database
+useEffect(function(){
+if(!userId)return;
+(async function(){
+try{
+var data=await authedJson("/api/buyers",undefined,"GET");
+if(Array.isArray(data?.buyers))setDbBuyers(data.buyers);
+}catch(e){console.warn("buyers load:",e?.message)}finally{setBuyersLoaded(true)}
+})();
+},[userId]);
+
+// Real comps fetcher
+async function fetchRealComps(lead){
+try{
+var data=await authedJson("/api/comps/search",{
+address:lead.propertyAddress,
+city:lead.propertyCity,
+state:lead.propertyState,
+zip:lead.propertyZip,
+bedrooms:lead.propData?.bedBath?.split("/")[0],
+maxComps:8
+});
+return{comps:data.comps||[],arvEst:data.arvEst||lead.arv,confidence:data.confidence||0,spread:data.spread||0,source:data.source||"api"};
+}catch(e){
+toast("Comps unavailable: "+(e?.message||"API error"));
+return genComps(lead);
+}
+}
+
+// Save buyer
+async function saveBuyer(){
+if(!newBuyer.name){toast("Buyer name required.");return}
+try{
+var payload={
+name:newBuyer.name,company:newBuyer.company,buyer_type:newBuyer.buyer_type,
+phone:newBuyer.phone,email:newBuyer.email,
+price_min:parseFloat(newBuyer.price_min)||0,
+price_max:parseFloat(newBuyer.price_max)||999999,
+criteria:newBuyer.criteria?newBuyer.criteria.split(",").map(function(s){return s.trim()}).filter(Boolean):[],
+locations:newBuyer.locations?newBuyer.locations.split(",").map(function(s){return s.trim()}).filter(Boolean):[],
+rehab_tolerance:newBuyer.rehab_tolerance,financing:newBuyer.financing,notes:newBuyer.notes
+};
+var data=await authedJson("/api/buyers",payload);
+if(data.buyer)setDbBuyers(function(prev){return[].concat(prev,[data.buyer])});
+setAddBuyerOpen(false);
+setNewBuyer({name:"",company:"",buyer_type:"Fix & Flip",phone:"",email:"",price_min:"",price_max:"",criteria:"",locations:"",rehab_tolerance:"Medium",financing:"Cash",notes:""});
+toast("Buyer saved!");
+}catch(e){toast("Save failed: "+(e?.message||"error"))}
+}
+
+// Delete buyer
+async function deleteBuyer(id){
+try{
+await authedJson("/api/buyers",{id:id},"DELETE");
+setDbBuyers(function(prev){return prev.filter(function(b){return b.id!==id})});
+toast("Buyer removed.");
+}catch(e){toast("Delete failed.")}
 }
 
 useEffect(function(){
@@ -340,7 +386,7 @@ const logC=useCallback(function(id){setLeads(function(p){return p.map(function(l
 const updN=useCallback(function(id,n){setLeads(function(p){return p.map(function(l){return l.id===id?Object.assign({},l,{userNotes:n}):l})})},[]);
 const addLeadToPipeline=useCallback(function(lead){var added=false;setLeads(function(prev){if(prev.some(function(item){return item.id===lead.id}))return prev;added=true;return[Object.assign({},lead,{activityLog:[].concat(lead.activityLog||[],[{time:nowT(),date:td(),action:"Lead added to saved pipeline"}])})].concat(prev)});if(added){setPipe(function(prev){return prev[lead.id]?prev:Object.assign({},prev,{[lead.id]:"New Lead"})});toast("Lead added to saved pipeline.")}else{toast("Lead already saved in pipeline.")}},[]);
 const addAllSearchToPipeline=useCallback(function(){if(!searchResults.length){toast("No search results to add.");return}var addedCount=0;setLeads(function(prev){var existing=new Set(prev.map(function(item){return item.id}));var additions=searchResults.filter(function(item){return!existing.has(item.id)}).map(function(item){addedCount+=1;return Object.assign({},item,{activityLog:[].concat(item.activityLog||[],[{time:nowT(),date:td(),action:"Lead added to saved pipeline"}])})});return additions.concat(prev)});if(addedCount>0){setPipe(function(prev){var next=Object.assign({},prev);searchResults.forEach(function(item){if(!next[item.id])next[item.id]="New Lead"});return next});toast("Added "+addedCount+" lead"+(addedCount===1?"":"s")+" to saved pipeline.")}else{toast("All visible leads are already in the pipeline.")}},[searchResults]);
-const buyers=useMemo(function(){return SBUYERS.map(function(b){return Object.assign({},b,{matches:leads.filter(function(l){return l.deal?.offer>=b.pr[0]&&l.deal?.offer<=b.pr[1]})})})},[leads]);
+const buyers=useMemo(function(){return dbBuyers.map(function(b){return Object.assign({},b,{matches:leads.filter(function(l){return l.deal?.offer>=b.pr[0]&&l.deal?.offer<=b.pr[1]})})})},[leads,dbBuyers]);
 async function gen(){if(!city&&!state&&!zip&&!county)return;var nextLoc=[city,county?county+" County":"",state,zip].filter(Boolean).join(", ");setLoc(nextLoc);setSearchResults([]);setSearchMeta(null);setLd(true);try{var data=await authedJson("/api/leads/search",{city:city,county:county,state:state,zip:zip,lt:lt,price:price,count:parseInt(num),df:df,dc:parseInt(dc),ft:ft});var nextLeads=Array.isArray(data?.leads)?data.leads:[];var meta=data?.meta||{};setSearchResults(nextLeads);setSearchMeta(meta);if(nextLeads.length>0){var providerLabel=meta.directProviderCount>0?"provider-backed/public-record":"trusted live-source";toast("Loaded "+nextLeads.length+" live lead"+(nextLeads.length===1?"":"s")+" from "+providerLabel+" research.")}else{toast(meta.noResultsReason||"No verified live leads found. Try a broader area or fewer filters.")}}catch(e){toast((e&&e.message?e.message:"Lead research failed")+" No demo fallback loaded.")}finally{setLd(false)}}
 
 // ANALYTICS CALCULATIONS per blueprint
@@ -701,9 +747,35 @@ tab===2&&React.createElement("div",{className:"pg"},React.createElement("div",{c
 !leads.length?React.createElement("div",{className:"empty"},React.createElement("div",{className:"empty-ico"},"\ud83d\udcc5"),React.createElement("div",{className:"empty-t"},"No Leads Yet")):
 leads.map(function(l){var steps=bDrip(l,loc),done=l.dripDone||[];return React.createElement("div",{className:"dc",key:l.id},React.createElement("div",{className:"dc-h"},React.createElement("div",null,React.createElement("div",{className:"dc-n"},l.name),React.createElement("div",{className:"dc-s"},(l.distressed?"\ud83c\udfe9\ufe0f ":""),(l.propertyStreet||l.area)," \u00b7 ",done.length,"/",steps.length)),React.createElement("button",{className:"btn btn-gd btn-sm",onClick:function(){cpy(steps.map(function(s){return s.day+"\n"+s.msg}).join("\n\n\u2500\u2500\u2500\n\n"))}},"Copy All")),React.createElement("div",{className:"dc-bd"},steps.map(function(s,si){var dn=done.includes(si);return React.createElement("div",{className:"ds",key:si},React.createElement("div",{className:"dd "+s.cls,style:dn?{background:"var(--green)",color:"#fff"}:{}},dn?"\u2713":s.day.replace("Day ","D")),React.createElement("div",{className:"ds-c"},React.createElement("div",{className:"ds-l"},s.type," \u2014 ",s.label),React.createElement("div",{className:"ds-m",style:dn?{opacity:.5}:{}},s.msg),React.createElement("div",{style:{display:"flex",gap:".35rem",marginTop:".35rem",flexWrap:"wrap"}},React.createElement("button",{className:"btn btn-ot btn-sm",onClick:function(){cpy(s.msg)}},"Copy"),React.createElement("button",{className:"btn btn-sm "+(dn?"btn-ot":"btn-gd"),onClick:function(){setLeads(function(p){return p.map(function(x){return x.id===l.id?Object.assign({},x,{dripDone:dn?done.filter(function(d){return d!==si}):[].concat(done,[si])}):x})});if(!dn)logC(l.id)}},dn?"\u21a9 Undo":"\u2713 Sent"),s.type.includes("Call")&&React.createElement("a",{href:"tel:"+l.phone,className:"btn btn-bl btn-sm",style:{textDecoration:"none"},onClick:function(){logC(l.id)}},"\ud83d\udcde"),s.type.includes("Text")&&React.createElement("a",{href:"sms:"+l.phone,className:"btn btn-dk btn-sm",style:{textDecoration:"none"}},"\ud83d\udcac"))))})))})),
 
-// Tab 3: BUYERS
-tab===3&&React.createElement("div",{className:"pg"},React.createElement("div",{className:"pg-t"},"Cash Buyer\u2019s List"),React.createElement("div",{className:"pg-s"},"Auto-matched against your leads. Includes preferred locations, rehab tolerance, and financing type."),
-React.createElement("div",{className:"bgrid"},buyers.map(function(b){return React.createElement("div",{className:"bc",key:b.id},React.createElement("div",{className:"bc-h"},React.createElement("div",null,React.createElement("div",{className:"bc-n"},b.name),React.createElement("div",{className:"bc-tp"},b.type," \u00b7 ",b.deals," deals")),React.createElement("div",{className:"bc-mt"},b.matches.length)),React.createElement("div",{className:"bc-bd"},React.createElement("div",{className:"g2",style:{marginBottom:".6rem"}},React.createElement("div",{className:"fg"},React.createElement("label",null,"Phone"),React.createElement("div",{style:{fontSize:".8rem"}},React.createElement("a",{href:"tel:"+b.phone,style:{color:"#1a6a30",textDecoration:"none"}},b.phone))),React.createElement("div",{className:"fg"},React.createElement("label",null,"Range"),React.createElement("div",{style:{fontSize:".8rem",fontWeight:600}},"$"+(b.pr[0]/1000).toFixed(0)+"K\u2013$"+(b.pr[1]/1000).toFixed(0)+"K"))),React.createElement("div",{className:"fg",style:{marginBottom:".4rem"}},React.createElement("label",null,"Email"),React.createElement("div",{style:{fontSize:".78rem"}},React.createElement("a",{href:"mailto:"+b.email,style:{color:"var(--blue)",textDecoration:"none"}},b.email))),React.createElement("div",{className:"g3",style:{marginBottom:".5rem"}},React.createElement("div",{className:"fg"},React.createElement("label",null,"Locations"),React.createElement("div",{style:{fontSize:".72rem"}},(b.locations||[]).join(", "))),React.createElement("div",{className:"fg"},React.createElement("label",null,"Rehab Tol."),React.createElement("div",{style:{fontSize:".72rem"}},b.rehabTol||"Any")),React.createElement("div",{className:"fg"},React.createElement("label",null,"Financing"),React.createElement("div",{style:{fontSize:".72rem"}},b.financing||"Cash"))),React.createElement("div",{style:{marginBottom:".5rem"}},(b.criteria||[]).map(function(c){return React.createElement("span",{className:"btag",key:c},c)})),b.matches.length>0&&React.createElement("div",{className:"mbox"},React.createElement("div",{className:"mbox-t"},"\u2705 Matching (",b.matches.length,")"),b.matches.slice(0,3).map(function(l){return React.createElement("div",{className:"mbox-r",key:l.id},React.createElement("span",null,l.name),React.createElement("span",{style:{fontWeight:700,color:"var(--green)"}},fmt(l.deal?.offer)))})),React.createElement("div",{style:{display:"flex",gap:".35rem",marginTop:".7rem"}},React.createElement("button",{className:"btn btn-ot btn-sm",onClick:function(){cpy(b.name+"\n"+b.phone+"\n"+b.email)}},"Copy"),b.matches.length>0&&React.createElement("button",{className:"btn btn-gn btn-sm",onClick:function(){setModal({t:"bp",buyer:b,matches:b.matches})}},"Send Deals \u2192"))))})),
+// Tab 3: BUYERS (loaded from database)
+tab===3&&React.createElement("div",{className:"pg"},React.createElement("div",{className:"pg-t"},"Cash Buyer\u2019s List"),React.createElement("div",{className:"pg-s"},"Your buyer database. Auto-matched against your pipeline leads."),
+React.createElement("button",{className:"btn btn-gd btn-sm",style:{marginBottom:"1rem"},onClick:function(){setAddBuyerOpen(true)}},"\u2795 Add Buyer"),
+addBuyerOpen&&React.createElement("div",{className:"card",style:{marginBottom:"1rem"}},
+React.createElement("div",{className:"ctitle"},"\u2795 New Buyer"),
+React.createElement("div",{className:"g2",style:{marginBottom:".6rem"}},
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Name *"),React.createElement("input",{className:"inp",value:newBuyer.name,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{name:e.target.value}))},placeholder:"Buyer name"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Company"),React.createElement("input",{className:"inp",value:newBuyer.company,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{company:e.target.value}))},placeholder:"Company name"}))
+),
+React.createElement("div",{className:"g3",style:{marginBottom:".6rem"}},
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Phone"),React.createElement("input",{className:"inp",value:newBuyer.phone,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{phone:e.target.value}))},placeholder:"(555) 000-0000"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Email"),React.createElement("input",{className:"inp",value:newBuyer.email,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{email:e.target.value}))},placeholder:"email@domain.com"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Type"),React.createElement("select",{className:"sel",value:newBuyer.buyer_type,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{buyer_type:e.target.value}))}},React.createElement("option",null,"Fix & Flip"),React.createElement("option",null,"Buy & Hold"),React.createElement("option",null,"Turnkey"),React.createElement("option",null,"Wholesale"),React.createElement("option",null,"Land")))
+),
+React.createElement("div",{className:"g3",style:{marginBottom:".6rem"}},
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Min Price ($)"),React.createElement("input",{className:"inp",type:"number",value:newBuyer.price_min,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{price_min:e.target.value}))},placeholder:"80000"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Max Price ($)"),React.createElement("input",{className:"inp",type:"number",value:newBuyer.price_max,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{price_max:e.target.value}))},placeholder:"300000"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Financing"),React.createElement("select",{className:"sel",value:newBuyer.financing,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{financing:e.target.value}))}},React.createElement("option",null,"Cash"),React.createElement("option",null,"Hard Money"),React.createElement("option",null,"Conventional"),React.createElement("option",null,"Cash/Hard Money")))
+),
+React.createElement("div",{className:"g2",style:{marginBottom:".6rem"}},
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Locations (comma-separated)"),React.createElement("input",{className:"inp",value:newBuyer.locations,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{locations:e.target.value}))},placeholder:"Tampa, St Pete, Clearwater"})),
+React.createElement("div",{className:"fg"},React.createElement("label",null,"Criteria (comma-separated)"),React.createElement("input",{className:"inp",value:newBuyer.criteria,onChange:function(e){setNewBuyer(Object.assign({},newBuyer,{criteria:e.target.value}))},placeholder:"SFR, needs work, close 14d"}))
+),
+React.createElement("div",{style:{display:"flex",gap:".4rem"}},
+React.createElement("button",{className:"btn btn-gd btn-sm",onClick:saveBuyer},"Save Buyer"),
+React.createElement("button",{className:"btn btn-ot btn-sm",onClick:function(){setAddBuyerOpen(false)}},"Cancel"))
+),
+buyers.length===0&&!addBuyerOpen?React.createElement("div",{className:"empty"},React.createElement("div",{className:"empty-ico"},"\ud83c\udfe6"),React.createElement("div",{className:"empty-t"},"No Buyers Yet"),React.createElement("div",{className:"empty-s"},"Add your cash buyers above to auto-match with pipeline leads.")):
+React.createElement("div",{className:"bgrid"},buyers.map(function(b){return React.createElement("div",{className:"bc",key:b.id},React.createElement("div",{className:"bc-h"},React.createElement("div",null,React.createElement("div",{className:"bc-n"},b.name,b.company?" \u00b7 "+b.company:""),React.createElement("div",{className:"bc-tp"},b.type," \u00b7 ",b.deals||0," deals")),React.createElement("div",{className:"bc-mt"},b.matches.length)),React.createElement("div",{className:"bc-bd"},React.createElement("div",{className:"g2",style:{marginBottom:".6rem"}},React.createElement("div",{className:"fg"},React.createElement("label",null,"Phone"),React.createElement("div",{style:{fontSize:".8rem"}},b.phone?React.createElement("a",{href:"tel:"+b.phone,style:{color:"#1a6a30",textDecoration:"none"}},b.phone):React.createElement("span",{style:{color:"var(--mut)"}},"Not set"))),React.createElement("div",{className:"fg"},React.createElement("label",null,"Range"),React.createElement("div",{style:{fontSize:".8rem",fontWeight:600}},"$"+(b.pr[0]/1000).toFixed(0)+"K\u2013$"+(b.pr[1]/1000).toFixed(0)+"K"))),React.createElement("div",{className:"fg",style:{marginBottom:".4rem"}},React.createElement("label",null,"Email"),React.createElement("div",{style:{fontSize:".78rem"}},b.email?React.createElement("a",{href:"mailto:"+b.email,style:{color:"var(--blue)",textDecoration:"none"}},b.email):React.createElement("span",{style:{color:"var(--mut)"}},"Not set"))),React.createElement("div",{className:"g3",style:{marginBottom:".5rem"}},React.createElement("div",{className:"fg"},React.createElement("label",null,"Locations"),React.createElement("div",{style:{fontSize:".72rem"}},(b.locations||[]).join(", ")||"Any")),React.createElement("div",{className:"fg"},React.createElement("label",null,"Rehab Tol."),React.createElement("div",{style:{fontSize:".72rem"}},b.rehabTol||"Any")),React.createElement("div",{className:"fg"},React.createElement("label",null,"Financing"),React.createElement("div",{style:{fontSize:".72rem"}},b.financing||"Cash"))),React.createElement("div",{style:{marginBottom:".5rem"}},(b.criteria||[]).map(function(c){return React.createElement("span",{className:"btag",key:c},c)})),b.matches.length>0&&React.createElement("div",{className:"mbox"},React.createElement("div",{className:"mbox-t"},"\u2705 Matching (",b.matches.length,")"),b.matches.slice(0,3).map(function(l){return React.createElement("div",{className:"mbox-r",key:l.id},React.createElement("span",null,l.name),React.createElement("span",{style:{fontWeight:700,color:"var(--green)"}},fmt(l.deal?.offer)))})),React.createElement("div",{style:{display:"flex",gap:".35rem",marginTop:".7rem"}},React.createElement("button",{className:"btn btn-ot btn-sm",onClick:function(){cpy(b.name+"\n"+(b.phone||"")+"\n"+(b.email||""))}},"Copy"),b.matches.length>0&&React.createElement("button",{className:"btn btn-gn btn-sm",onClick:function(){setModal({t:"bp",buyer:b,matches:b.matches})}},"Send Deals \u2192"),React.createElement("button",{className:"btn btn-sm",style:{background:"transparent",border:"1px solid var(--rust)",color:"var(--rust)",fontSize:".68rem"},onClick:function(){if(confirm("Remove "+b.name+"?"))deleteBuyer(b.id)}},"\u2715"))))})),
 ),
 
 // Tab 4: CONTRACTS
@@ -831,10 +903,10 @@ React.createElement("button",{className:"btn btn-ot",style:{color:"#f5f0e8",bord
 qa&&(function(){
 function qaSave(){
 if(!qn.name||!qn.phone){toast("Name & phone required.");return}
-var p2=SN[state]||SN.D,seed2=Math.floor(Math.random()*1000),sn2=100+((seed2*137+41)%9800),st2=p2[(seed2*3+7)%p2.length],z2=zip||"33981",street2=qn.street||(sn2+" "+st2),full2=street2+", "+(city||"Unknown")+", "+(state||"FL")+" "+z2;
+var z2=zip||"",street2=qn.street||"",full2=street2?(street2+", "+(city||"")+", "+(state||"")+" "+z2).trim():"";
 var arv2=parseFloat(qn.arv)||0,rep2=parseFloat(qn.repairs)||0;
-var propD=genPropData(arv2||150000,seed2);
-setLeads(function(prev){return[{id:"Q"+Date.now(),name:qn.name,type:qn.type,distressed:qn.type==="Distressed Seller",score:65,area:city||"Market",propertyAddress:full2,propertyStreet:street2,propertyCity:city||"Unknown",propertyState:state||"FL",propertyZip:z2,phone:qn.phone,altPhone:null,email:qn.email,contactPref:"Phone",budget:"",timeline:qn.timeline,tags:[],notes:qn.notes,userNotes:"",property:"Unknown",arv:arv2,repairCost:rep2,deal:calcD(arv2,rep2,fN),stage:"New Lead",distressTypes:[],violations:[],taxOwed:null,lastContacted:null,contactCount:0,dripDone:[],leadSource:qn.source,motivTags:[],propData:propD,activityLog:[{time:nowT(),date:td(),action:"Manually added via Quick Add"}],marketingCost:0}].concat(prev)});
+var propD={yearBuilt:0,sqft:0,assessed:0,mortgageEst:0,equityEst:0,propType:"Unknown",lotSize:"",bedBath:""};
+setLeads(function(prev){return[{id:"Q"+Date.now(),name:qn.name,type:qn.type,distressed:qn.type==="Distressed Seller",score:65,area:city||"Market",propertyAddress:full2,propertyStreet:street2,propertyCity:city||"",propertyState:state||"",propertyZip:z2,phone:qn.phone,altPhone:null,email:qn.email,contactPref:"Phone",budget:"",timeline:qn.timeline,tags:[],notes:qn.notes,userNotes:"",property:"Unknown",arv:arv2,repairCost:rep2,deal:calcD(arv2,rep2,fN),stage:"New Lead",distressTypes:[],violations:[],taxOwed:null,lastContacted:null,contactCount:0,dripDone:[],leadSource:qn.source,motivTags:[],propData:propD,activityLog:[{time:nowT(),date:td(),action:"Manually added via Quick Add"}],marketingCost:0}].concat(prev)});
 setQa(false);setQn({name:"",phone:"",email:"",street:"",type:"Seller",timeline:"30\u201360 days",arv:"",repairs:"",notes:"",source:"Cold Call"});toast("Lead added!")}
 return React.createElement("div",{className:"mbg",onClick:function(e){if(e.target===e.currentTarget){setQa(false);setQn({name:"",phone:"",email:"",street:"",type:"Seller",timeline:"30\u201360 days",arv:"",repairs:"",notes:"",source:"Cold Call"})}}},
 React.createElement("div",{className:"modal",style:{maxWidth:540}},
