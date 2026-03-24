@@ -198,7 +198,7 @@ export default async function handler(req, res) {
       return
     }
 
-    const allowedFields = ['stage', 'score', 'user_notes', 'contact_count', 'last_contacted', 'notes', 'activity_log']
+    const allowedFields = ['stage', 'score', 'user_notes', 'contact_count', 'last_contacted', 'notes', 'activity_log', 'phone', 'email']
     const patch = {}
     for (const key of allowedFields) {
       if (updates && updates[key] !== undefined) patch[key] = updates[key]
