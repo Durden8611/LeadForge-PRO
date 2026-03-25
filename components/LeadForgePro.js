@@ -10,6 +10,7 @@ const nowT=()=>new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-d
 
 // EXPANDED PIPELINE: 9 stages per blueprint
 const STAGES=["New Lead","Contacted","Appt Set","Offer Made","Contract Signed","Mktg to Buyers","Assigned","Closed","Dead Lead"];
+const PLACEHOLDER_NAMES=/^(owner on record|research candidate|recorded owner|unknown|n\/a)$/i;
 const SC=["s0","s1","s2","s3","s4","s5","s6","s7","s8"];
 const KC=["kc0","kc1","kc2","kc3","kc4","kc5","kc6","kc7","kc8"];
 
@@ -220,14 +221,15 @@ React.createElement("button",{className:"lcb hot",onClick:onCp},"Copy")
 ),
 // Skip trace results panel
 stRes&&stRes.phones&&stRes.phones.length>0&&React.createElement("div",{className:"st-panel"},
-React.createElement("div",{className:"st-hd"},"\ud83d\udd0d Skip Trace Results for "+l.name,React.createElement("button",{className:"st-cls",onClick:function(){onStClr(l.id)}},"✕")),
+React.createElement("div",{className:"st-hd"},"\ud83d\udd0d Skip Trace Results"+(stRes.searchedBy==="address"?" (by address)":" for "+l.name),React.createElement("button",{className:"st-cls",onClick:function(){onStClr(l.id)}},"✕")),
+stRes.ownerName&&React.createElement("div",{style:{fontSize:".74rem",color:"var(--gold)",fontWeight:600,marginBottom:".3rem"}},"\ud83d\udc64 Owner: "+stRes.ownerName),
 stRes.phones.map(function(ph,i){return React.createElement("div",{key:i,className:"st-row"},
 React.createElement("span",{className:"st-ph"},ph),
-React.createElement("button",{className:"lcb hot",style:{padding:"2px 8px",fontSize:".7rem"},onClick:function(){onStSv(l.id,ph,stRes.emails&&stRes.emails[0]||"")}},"Save")
+React.createElement("button",{className:"lcb hot",style:{padding:"2px 8px",fontSize:".7rem"},onClick:function(){onStSv(l.id,ph,stRes.emails&&stRes.emails[0]||"",stRes.ownerName||null)}},"Save")
 )}),
 stRes.emails&&stRes.emails.length>0&&stRes.emails.map(function(em,i){return React.createElement("div",{key:"e"+i,className:"st-row"},
 React.createElement("span",{className:"st-ph",style:{color:"var(--gold)"}},em),
-React.createElement("button",{className:"lcb hot",style:{padding:"2px 8px",fontSize:".7rem"},onClick:function(){onStSv(l.id,"",em)}},"Save")
+React.createElement("button",{className:"lcb hot",style:{padding:"2px 8px",fontSize:".7rem"},onClick:function(){onStSv(l.id,"",em,stRes.ownerName||null)}},"Save")
 )}),
 stRes.source&&React.createElement("div",{style:{fontSize:".65rem",color:"rgba(255,255,255,.4)",marginTop:".25rem"}},"via "+stRes.sources?.join(", "))
 ),
@@ -297,6 +299,8 @@ const[legalOpen,setLegalOpen]=useState(false);
 const[legalStateDetail,setLegalStateDetail]=useState(null);
 const[skipTraceId,setSkipTraceId]=useState(null);
 const[skipTraceResults,setSkipTraceResults]=useState({});
+const[enriching,setEnriching]=useState(false);
+const[enrichCount,setEnrichCount]=useState(0);
 
 // Wholesale legality warnings by state
 // ── COMPREHENSIVE STATE LEGAL DATABASE ───────────────────────────
@@ -490,24 +494,28 @@ setSkipTraceId(lead.id);
 try{
 var data=await authedJson("/api/leads/skiptrace",{
 name:lead.name,
+street:lead.propertyStreet||"",
 city:lead.propertyCity,
-state:lead.propertyState
+state:lead.propertyState,
+zip:lead.propertyZip||""
 });
 setSkipTraceResults(function(prev){return Object.assign({},prev,{[lead.id]:data})});
-if(data.found){toast("\u2713 Skip trace found "+(data.phones?.length||0)+" number"+(data.phones?.length!==1?"s":"")+" for "+lead.name)}
+if(data.found){var traceLabel=data.searchedBy==="address"?(lead.propertyStreet||lead.propertyAddress||lead.name):lead.name;toast("\u2713 Skip trace found "+(data.phones?.length||0)+" number"+(data.phones?.length!==1?"s":"")+" for "+traceLabel)}
 else{toast(data.message||"No public contact info found.")}
 }catch(e){toast("Skip trace failed: "+(e?.message||"error"))}
 finally{setSkipTraceId(null)}
 }
 
-// Save a skip trace phone/email to a lead (local state + DB persist)
-async function saveSkipTraceContact(leadId,phone,email){
+// Save a skip trace phone/email (and optionally discovered owner name) to a lead
+async function saveSkipTraceContact(leadId,phone,email,ownerName){
 setLeads(function(prev){return prev.map(function(l){
 if(l.id!==leadId)return l;
 var updates={};
 if(phone&&!l.phone)updates.phone=phone;
 if(email&&!l.email)updates.email=email;
-return Object.assign({},l,updates,{activityLog:[].concat(l.activityLog||[],[{time:nowT(),date:td(),action:"Contact info added via skip trace"}])});
+// If owner name was a placeholder and we found the real name, update it
+if(ownerName&&PLACEHOLDER_NAMES.test((l.name||"").trim()))updates.name=ownerName;
+return Object.assign({},l,updates,{activityLog:[].concat(l.activityLog||[],[{time:nowT(),date:td(),action:"Contact info added via skip trace"+(ownerName&&updates.name?"; owner identified as "+ownerName:"")}])});
 })});
 setSkipTraceResults(function(prev){var n=Object.assign({},prev);delete n[leadId];return n});
 toast("Contact info saved to lead!");
@@ -520,6 +528,35 @@ if(Object.keys(dbUpdates).length>0){
 await authedJson("/api/leads/crud",{id:leadId,updates:dbUpdates},"PATCH");
 }
 }catch(e){/* non-critical — local state already saved */}
+}
+
+// Auto-enrich a batch of leads with skip trace data (runs after search results load)
+async function autoEnrichLeads(leads){
+var toEnrich=leads.filter(function(l){return !l.phone&&l.propertyStreet});
+if(!toEnrich.length)return;
+setEnriching(true);setEnrichCount(toEnrich.length);
+try{
+// Process in chunks of 10 (batch endpoint limit)
+for(var i=0;i<toEnrich.length;i+=10){
+var chunk=toEnrich.slice(i,i+10);
+try{
+var data=await authedJson("/api/leads/skiptrace-batch",{leads:chunk.map(function(l){return{id:l.id,name:l.name,propertyStreet:l.propertyStreet,propertyCity:l.propertyCity,propertyState:l.propertyState,propertyZip:l.propertyZip}})});
+if(Array.isArray(data?.results)){
+setSearchResults(function(prev){
+return prev.map(function(l){
+var r=data.results.find(function(x){return x.leadId===l.id});
+if(!r||!r.found)return l;
+var updates={};
+if(r.phones&&r.phones[0]&&!l.phone)updates.phone=r.phones[0];
+if(r.emails&&r.emails[0]&&!l.email)updates.email=r.emails[0];
+if(r.ownerName&&PLACEHOLDER_NAMES.test((l.name||"").trim()))updates.name=r.ownerName;
+return Object.keys(updates).length?Object.assign({},l,updates):l;
+});
+});
+}
+}catch(e){/* chunk failed — continue */}
+}
+}finally{setEnriching(false);setEnrichCount(0)}
 }
 
 // Real comps fetcher
@@ -624,7 +661,7 @@ const updN=useCallback(function(id,n){setLeads(function(p){return p.map(function
 const addLeadToPipeline=useCallback(function(lead){var added=false;setLeads(function(prev){if(prev.some(function(item){return item.id===lead.id}))return prev;added=true;return[Object.assign({},lead,{activityLog:[].concat(lead.activityLog||[],[{time:nowT(),date:td(),action:"Lead added to saved pipeline"}])})].concat(prev)});if(added){setPipe(function(prev){return prev[lead.id]?prev:Object.assign({},prev,{[lead.id]:"New Lead"})});toast("Lead added to saved pipeline.")}else{toast("Lead already saved in pipeline.")}},[]);
 const addAllSearchToPipeline=useCallback(function(){if(!searchResults.length){toast("No search results to add.");return}var addedCount=0;setLeads(function(prev){var existing=new Set(prev.map(function(item){return item.id}));var additions=searchResults.filter(function(item){return!existing.has(item.id)}).map(function(item){addedCount+=1;return Object.assign({},item,{activityLog:[].concat(item.activityLog||[],[{time:nowT(),date:td(),action:"Lead added to saved pipeline"}])})});return additions.concat(prev)});if(addedCount>0){setPipe(function(prev){var next=Object.assign({},prev);searchResults.forEach(function(item){if(!next[item.id])next[item.id]="New Lead"});return next});toast("Added "+addedCount+" lead"+(addedCount===1?"":"s")+" to saved pipeline.")}else{toast("All visible leads are already in the pipeline.")}},[searchResults]);
 const buyers=useMemo(function(){return dbBuyers.map(function(b){return Object.assign({},b,{matches:leads.filter(function(l){return l.deal?.offer>=b.pr[0]&&l.deal?.offer<=b.pr[1]})})})},[leads,dbBuyers]);
-async function gen(){if(!city&&!state&&!zip&&!county)return;var nextLoc=[city,county?county+" County":"",state,zip].filter(Boolean).join(", ");setLoc(nextLoc);setSearchResults([]);setSearchMeta(null);setLd(true);try{var data=await authedJson("/api/leads/search",{city:city,county:county,state:state,zip:zip,lt:lt,price:price,count:parseInt(num),df:df,dc:parseInt(dc),ft:ft});var nextLeads=Array.isArray(data?.leads)?data.leads:[];var meta=data?.meta||{};setSearchResults(nextLeads);setSearchMeta(meta);if(nextLeads.length>0){var providerLabel=meta.directProviderCount>0?"provider-backed/public-record":"trusted live-source";toast("Loaded "+nextLeads.length+" live lead"+(nextLeads.length===1?"":"s")+" from "+providerLabel+" research.")}else{toast(meta.noResultsReason||"No verified live leads found. Try a broader area or fewer filters.")}}catch(e){toast((e&&e.message?e.message:"Lead research failed")+" No demo fallback loaded.")}finally{setLd(false)}}
+async function gen(){if(!city&&!state&&!zip&&!county)return;var nextLoc=[city,county?county+" County":"",state,zip].filter(Boolean).join(", ");setLoc(nextLoc);setSearchResults([]);setSearchMeta(null);setLd(true);try{var data=await authedJson("/api/leads/search",{city:city,county:county,state:state,zip:zip,lt:lt,price:price,count:parseInt(num),df:df,dc:parseInt(dc),ft:ft});var nextLeads=Array.isArray(data?.leads)?data.leads:[];var meta=data?.meta||{};setSearchResults(nextLeads);setSearchMeta(meta);if(nextLeads.length>0){var providerLabel=meta.directProviderCount>0?"provider-backed/public-record":"trusted live-source";toast("Loaded "+nextLeads.length+" live lead"+(nextLeads.length===1?"":"s")+" from "+providerLabel+" research.");autoEnrichLeads(nextLeads)}else{toast(meta.noResultsReason||"No verified live leads found. Try a broader area or fewer filters.")}}catch(e){toast((e&&e.message?e.message:"Lead research failed")+" No demo fallback loaded.")}finally{setLd(false)}}
 
 // ANALYTICS CALCULATIONS per blueprint
 const std=leads.filter(function(l){return!l.distressed}),dist=leads.filter(function(l){return l.distressed});
@@ -942,6 +979,7 @@ React.createElement("div",{style:{display:"flex",alignItems:"flex-end",justifyCo
 React.createElement("div",null,
 React.createElement("div",{style:{fontFamily:"var(--sf)",fontSize:"1.6rem",fontWeight:900}},React.createElement("span",{style:{color:"var(--gold)"}},searchResults.length)," Live Search Results"),
 React.createElement("div",{style:{fontFamily:"var(--sm)",fontSize:".55rem",letterSpacing:".13em",color:"var(--mut)",textTransform:"uppercase",marginTop:".18rem"}},loc.toUpperCase(),county?" \u00b7 "+county+" Co.":"","  \u00b7 Fee: ",ft," \u00b7 CPL: $",searchCostPerLead.toFixed(2)),
+enriching&&React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:".35rem",marginTop:".35rem",fontSize:".72rem",color:"var(--gold)",fontWeight:600}},React.createElement("span",{style:{animation:"spin 1s linear infinite",display:"inline-block"}},"\u23f3"),"Enriching "+enrichCount+" lead"+(enrichCount!==1?"s":"")+" with owner contact info\u2026"),
 searchMeta&&React.createElement("div",{style:{display:"flex",gap:".35rem",flexWrap:"wrap",marginTop:".55rem"}},
 React.createElement("span",{className:"tag"},"Provider: ",String(searchMeta.provider||"none")),
 typeof searchMeta.directProviderCount==="number"&&React.createElement("span",{className:"tag"},searchMeta.directProviderCount," provider-backed"),
